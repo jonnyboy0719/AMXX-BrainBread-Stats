@@ -6,20 +6,23 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"1.0"
+#define VERSION	"1.2"
 
 new lastfrags[33]
 new lastDeadflag[33]
 new bool:LoadStatsForPlayer[33];
 new bool:LoadStatsForPlayerDone[33];
 new bool:HasSpawned[33];
+new bool:AutoLoad[33];
+new bool:LoadMyPoints[33];
 
 new Handle:g_hTuple;
 new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type;
 
+// Need to re-write this so it will read the %s
 new const szTables[][] = 
 {
-	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `exp` varchar(50) DEFAULT '0.000000', `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
+	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `exp` varchar(50) DEFAULT '0.000000', `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, `autoload` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
 }
 
 public plugin_init() {
@@ -35,9 +38,75 @@ public plugin_init() {
 	mysqlx_pass = register_cvar ("bb_pass", ""); // The password from the db password
 	mysqlx_type = register_cvar ("bb_type", "mysql"); // The password from the db type
 	mysqlx_db = register_cvar ("bb_dbname", "my_database"); // The database name 
-	register_cvar ("bb_table", "bb_stats"); // The password from the db table
+	register_cvar ("bb_table", "bb_stats"); // The table where it will save the information
+	
+	// Client commands
+	register_clcmd("reset", "ResetSkills")
+	register_clcmd("autoload", "AutoLoadSkills")
+	register_clcmd("loadpoints", "LoadPoints")
+	register_clcmd("say","hook_say")
+	register_clcmd("say_team","hook_say")
 
 	CreateTables()
+}
+
+public ResetSkills(id)
+{
+	// Lets get the player's skills and points
+	new hps, skill, speed, points;
+	hps = bb_get_user_hps(id);
+	skill = bb_get_user_skill(id);
+	speed = bb_get_user_speed(id);
+	points = bb_get_user_points(id);
+
+	// Now, lets convert them into points!
+	bb_set_user_points(id, points+(hps+speed+skill));
+
+	// Now the last bit, lets reset the skills
+	bb_set_user_hps(id, 0);
+	bb_set_user_skill(id, 0);
+	bb_set_user_speed(id, 0);
+
+	return PLUGIN_HANDLED
+}
+
+public AutoLoadSkills(id)
+{
+	new auth[33];
+	get_user_authid( id, auth, 32);
+	ChangeAutoLoad(id, auth)
+	return PLUGIN_HANDLED
+}
+
+public LoadPoints(id)
+{
+	LoadMyPoints[id] = true;
+	new auth[33];
+	get_user_authid( id, auth, 32);
+	LoadLevel(id, auth)
+	return PLUGIN_HANDLED
+}
+
+public hook_say(id)
+{
+	new said[32]
+	read_argv(1, said, 31)
+	remove_quotes(said)
+
+	if (equali(said[0], "/reset"))
+	{
+		ResetSkills(id)
+	}
+	else if (equali(said[0], "/autoload"))
+	{
+		AutoLoadSkills(id)
+	}
+	else if (equali(said[0], "/loadpoints"))
+	{
+		LoadPoints(id)
+	}
+	
+	return PLUGIN_CONTINUE
 }
 
 public PluginThinkLoop()
@@ -129,6 +198,7 @@ public client_connect(id)
 {
 	LoadStatsForPlayer[id] = false;
 	LoadStatsForPlayerDone[id] = false;
+	LoadMyPoints[id] = false;
 	HasSpawned[id] = false;
 }
 
@@ -162,6 +232,7 @@ public client_disconnect(id)
 	}
 	LoadStatsForPlayer[id] = false;
 	LoadStatsForPlayerDone[id] = false;
+	LoadMyPoints[id] = false;
 }
 
 SaveLevel(id, auth[])
@@ -188,13 +259,22 @@ SaveLevel(id, auth[])
 		SQL_QueryError(query, error, 127)
 		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
 	} else {
-		new hps, skill, level, speed, points;
+		new hps, skill, level, speed, points, sql_autload;
 		hps = bb_get_user_hps(id);
 		skill = bb_get_user_skill(id);
 		level = bb_get_user_level(id);
 		speed = bb_get_user_speed(id);
 		points = bb_get_user_points(id);
 		new Float:GetEXP = bb_get_user_exp(id)
+
+		if (AutoLoad[id])
+		{
+			sql_autload = 1;
+		}
+		else
+		{
+			sql_autload = 0;
+		}
 /*
 		server_print("Saved stats:")
 		server_print("ID: %s", id)
@@ -205,7 +285,50 @@ SaveLevel(id, auth[])
 		server_print("SPEED: %d", speed)
 		server_print("POINTS: %d", points)
 */
-		SQL_QueryAndIgnore(sql, "REPLACE INTO `%s` (`authid`, `exp`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`) VALUES ('%s', %i, %d, %d, %d, %d, %d);", table, auth, floatround(GetEXP), level, hps, skill, speed, points )
+		SQL_QueryAndIgnore(sql, "REPLACE INTO `%s` (`authid`, `exp`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`, `autoload`) VALUES ('%s', %i, %d, %d, %d, %d, %d, %d);", table, auth, floatround(GetEXP), level, hps, skill, speed, points, sql_autload )
+	}
+
+	SQL_FreeHandle(query)
+	SQL_FreeHandle(sql)
+	SQL_FreeHandle(info)
+}
+
+ChangeAutoLoad(id, auth[])
+{ 
+	new error[128], errno
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32], sql_autload
+	
+	if (AutoLoad[id])
+	{
+		sql_autload = 0;
+		AutoLoad[id] = false;
+	}
+	else
+	{
+		sql_autload = 1;
+		AutoLoad[id] = true;
+	}
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not saved")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `autoload` = %d WHERE `authid`='%s';", table, sql_autload, auth )
 	}
 
 	SQL_FreeHandle(query)
@@ -239,15 +362,16 @@ LoadLevel(id, auth[])
 	} else {
 		server_print("loaded stats for:^nID: ^"%s^"", auth)
 		
-		new hps, skill, lvl, speed, points, exp;
+		new hps, skill, lvl, speed, points, exp, autoload;
 		exp = SQL_FieldNameToNum(query, "exp");
 		lvl = SQL_FieldNameToNum(query, "lvl");
 		hps = SQL_FieldNameToNum(query, "skill_hp");
 		skill = SQL_FieldNameToNum(query, "skill_skill");
 		speed = SQL_FieldNameToNum(query, "skill_speed");
 		points = SQL_FieldNameToNum(query, "points");
+		autoload = SQL_FieldNameToNum(query, "autoload");
 
-		new sql_lvl, sql_exp, sql_hps, sql_skill, sql_speed, sql_points;
+		new sql_lvl, sql_exp, sql_hps, sql_skill, sql_speed, sql_points, sql_autoload;
 
 		while (SQL_MoreResults(query))
 		{
@@ -261,6 +385,7 @@ LoadLevel(id, auth[])
 			sql_skill = SQL_ReadResult(query, skill);
 			sql_speed = SQL_ReadResult(query, speed);
 			sql_points = SQL_ReadResult(query, points);
+			sql_autoload = SQL_ReadResult(query, autoload);
 
 			//*
 			server_print("-------")
@@ -270,10 +395,20 @@ LoadLevel(id, auth[])
 			server_print("SKILL: %d", sql_skill);
 			server_print("SPEED: %d", sql_speed);
 			server_print("POINTS: %d", sql_points);
+			server_print("AUTOLOAD: %d", sql_autoload);
 			server_print("-------")
 			//*/
 
-			fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
+			if(sql_autoload == 1 || LoadMyPoints[id])
+			{
+				fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
+				AutoLoad[id] = true;
+				if (LoadMyPoints[id])
+					LoadMyPoints[id] = false;
+			}
+			else
+				AutoLoad[id] = false;
+
 			bb_set_user_level(id, sql_lvl);
 			bb_update_user_exp(id, float(sql_exp));
 			bb_set_user_hps(id, sql_hps);
