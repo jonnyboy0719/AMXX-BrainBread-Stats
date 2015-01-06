@@ -9,11 +9,12 @@ Special thanks: Noname -- [Asd2Bam](http://asd2bam.org/)
 How it Works
 -----------
 
-Simply copy the `bb_stats.amxx` to your plugins folder and add `bb_stats.amxx` under `configs/plugins.ini` file.
-Now open `configs/sql.cfg` and add the new commands:
-`bb_host			"127.0.0.1"`
-`bb_user			"root"`
-`bb_pass			""`
-`bb_type			"mysql"`
-`bb_dbname			"my_database"`
-`bb_table			"bb_stats"`
+Simply copy the `bb_stats.amxx` to your plugins folder and add `bb_stats.amxx` under `configs/plugins.ini` file.  
+
+Now open `configs/sql.cfg` and add the new commands:  
+`bb_host			"127.0.0.1"`  
+`bb_user			"root"`  
+`bb_pass			""`  
+`bb_type			"mysql"`  
+`bb_dbname			"my_database"`  
+`bb_table			"bb_stats"`  
