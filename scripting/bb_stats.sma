@@ -365,6 +365,9 @@ LoadLevel(id, auth[])
 	{
 		log_amx("<^"%s^"> from %s has been converted to the SQL.", auth, filename)
 		SaveLevel(id, auth)
+		LoadStatsForPlayer[id] = false;
+		LoadStatsForPlayerDone[id] = true;
+		HasSpawned[id] = true;
 	}
 	else
 	{
