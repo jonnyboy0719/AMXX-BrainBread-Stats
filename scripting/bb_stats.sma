@@ -1,12 +1,21 @@
+//=============================================================================
+//
+// This plugin has been created from scratch by Johan "JonnyBoy0719" Ehrendahl.
+// Special thanks to noname from asd2bam for helping me with the EXP bug!
+//
+// Plugin released: 2015-01-06
+//
+//=============================================================================
+
 #include <amxmodx>
+#include <amxmisc>
 #include <brainbread>
 #include <fakemeta>
 #include <sqlx>
-#include <engine_stocks>
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"1.3"
+#define VERSION	"2.0"
 
 new lastfrags[33]
 new lastDeadflag[33]
@@ -14,15 +23,19 @@ new bool:LoadStatsForPlayer[33];
 new bool:LoadStatsForPlayerDone[33];
 new bool:HasSpawned[33];
 new bool:AutoLoad[33];
+new bool:LoadMyPointsOnce[33];
 new bool:LoadMyPoints[33];
-
+new bool:enable_ranking=false;
+new rank_max = 0
 new Handle:g_hTuple;
 new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type;
+new setranking, rank_name[185], ply_rank, top_rank;
 
 // Need to re-write this so it will read the %s
 new const szTables[][] = 
 {
-	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `exp` TEXT DEFAULT NULL, `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, `autoload` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
+	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `exp` TEXT DEFAULT NULL, `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, `autoload` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;",
+	"CREATE TABLE IF NOT EXISTS `bb_stats_rank` ( `id` bigint(20) NOT NULL DEFAULT '0', `lvl` int(11) DEFAULT NULL, `title` text NOT NULL, PRIMARY KEY (`id`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
 }
 
 public plugin_init() {
@@ -31,7 +44,9 @@ public plugin_init() {
 	set_cvar_string("bbstats_version", VERSION)
 
 	register_forward(FM_PlayerPreThink,"PluginThink")
+	register_forward(FM_GetGameDescription,"GameInformation")  
 	set_task(1.0,"PluginThinkLoop",0,"",0,"b")
+	set_task(30.0,"PluginAdverts",0,"",0,"b")
 
 	mysqlx_host = register_cvar ("bb_host", "127.0.0.1"); // The host from the db
 	mysqlx_user = register_cvar ("bb_user", "root"); // The username from the db login
@@ -39,18 +54,38 @@ public plugin_init() {
 	mysqlx_type = register_cvar ("bb_type", "mysql"); // The password from the db type
 	mysqlx_db = register_cvar ("bb_dbname", "my_database"); // The database name 
 	register_cvar ("bb_table", "bb_stats"); // The table where it will save the information
+	register_cvar ("bb_rank_table", "bb_stats_rank"); // The table where it will save the information
 	register_cvar ("bb_filerewrite", "0"); // This will re-write the player data file if sv_savexp is not on 0
-	
+	register_cvar ("bb_gameinfo", "1"); // This will enable GameInformation to be overwritten.
+	register_cvar ("bb_webstats_url", "mysite.net"); // This will display the webstats (TODO: make an option for showing for MOTD or just text; bb_webstats_type 0 | 1)
+	setranking = register_cvar ("bb_ranking", "1"); // This will enable ranking, or simply disable it.
+
 	// Client commands
 	register_clcmd("reset", "ResetSkills")
 	register_clcmd("autoload", "AutoLoadSkills")
 	register_clcmd("loadpoints", "LoadPoints")
+	register_clcmd("bbhelp", "BBHelp")
+	register_clcmd("bbstats", "StatsVersion")
+
 	register_clcmd("say","hook_say")
 	register_clcmd("say_team","hook_say")
 
 	CreateTables()
 	PlayerDataFile()
 }
+
+public GameInformation()
+{
+	new bb_getinfo = get_cvar_num ( "bb_gameinfo" )
+	if (bb_getinfo>=1)
+	{
+		new gameinfo[55]
+		format( gameinfo, 54, "BrainBread v1.2 || SQL STATS %s", VERSION )
+		forward_return( FMV_STRING, gameinfo )
+		return FMRES_SUPERCEDE;
+	}
+	return PLUGIN_HANDLED
+}  
 
 public ResetSkills(id)
 {
@@ -63,6 +98,10 @@ public ResetSkills(id)
 
 	// Now, lets convert them into points!
 	bb_set_user_points(id, points+(hps+speed+skill));
+
+	// Lets print to the client's chat, so we know we made this action
+	new GetPoints = points+(hps+speed+skill)
+	client_print ( id, print_chat, "You skills have been reset, and turned them into %d point(s).", GetPoints ) 
 
 	// Now the last bit, lets reset the skills
 	bb_set_user_hps(id, 0);
@@ -89,6 +128,64 @@ public LoadPoints(id)
 	return PLUGIN_HANDLED
 }
 
+public StatsVersion(id)
+{
+	new Float:SetTime = 8.0
+	set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
+	show_hudmessage(id, "This server is running BB Stats Version %s", VERSION)
+	return PLUGIN_HANDLED
+}
+
+public ShowWebStats(id)
+{
+	new WEBPLACE[185]
+	get_cvar_string("bb_webstats_url",WEBPLACE,184)
+	new Float:SetTime = 8.0
+	set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
+	show_hudmessage(id, "Webstats URL: %s", WEBPLACE )
+	client_print ( id, print_chat, "You can visit the webstats at: %s", WEBPLACE )
+	return PLUGIN_HANDLED
+}
+
+public ShowMyRank(id)
+{
+	client_print ( id, print_chat, "you are on rank %d of %d with the title: ^"%s^"", ply_rank, top_rank, rank_name )
+	return PLUGIN_HANDLED
+}
+
+public BBHelp(id, ShowCommands)
+{
+	// Chat Print
+	if ( ShowCommands)
+	{
+		client_print ( id, print_chat, "The commands have been printed on your console." )
+		// Console Print
+		client_print ( id, print_console, "==----------[[ BB STATS ]]--------------==" )
+		client_print ( id, print_console, "/bbhelp		--		Shows this information" )
+		client_print ( id, print_console, "/reset		--		To reset your skills" )
+		client_print ( id, print_console, "/autoload	--		Autoloads your points on connection" )
+		client_print ( id, print_console, "/loadpoints	--		To load your points" )
+		client_print ( id, print_console, "/bbstats		--		Shows current version (%s)", VERSION )
+		if ( enable_ranking )
+		{
+			client_print ( id, print_console, "==----------[[ BB RANKING ]]-------------==" )
+	//		client_print ( id, print_console, "/top10		--		Shows the top10 players" ) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+			client_print ( id, print_console, "/rank		--		Shows your rank" )
+	//		client_print ( id, print_console, "/ranking		--		Shows a menu of everyone's ranking" ) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+			client_print ( id, print_console, "/web			--		Shows webstats url" )
+		}
+		client_print ( id, print_console, "==--------------------------------------==" )
+	}
+	else
+	{
+		if ( enable_ranking )
+			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats /rank /web", VERSION )
+		else
+			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats", VERSION )
+	}
+	return PLUGIN_HANDLED
+}
+
 public hook_say(id)
 {
 	new said[32]
@@ -106,6 +203,34 @@ public hook_say(id)
 	else if (equali(said[0], "/loadpoints"))
 	{
 		LoadPoints(id)
+	}
+	else if (equali(said[0], "/bbhelp"))
+	{
+		BBHelp(id,true)
+	}
+	else if (equali(said[0], "/bbstats") || equali(said[0], "/version"))
+	{
+		StatsVersion(id)
+	}
+	
+	if ( enable_ranking )
+	{
+		if (equali(said[0], "/top10")) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+		{
+		//	StatsVersion(id)
+		}
+		else if (equali(said[0], "/rank"))
+		{
+			ShowMyRank(id)
+		}
+		else if (equali(said[0], "/web"))
+		{
+			ShowWebStats(id)
+		}
+		else if (equali(said[0], "/ranking")) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+		{
+		//	StatsVersion(id)
+		}
 	}
 	
 	return PLUGIN_CONTINUE
@@ -133,6 +258,54 @@ public PluginThinkLoop()
 				new auth[33];
 				get_user_authid( id, auth, 32);
 				LoadLevel(id, auth)
+				StatsVersion(id)
+				if( setranking )
+					ShowStatsOnSpawn(id)
+			}
+		}
+	}
+
+	if ( setranking >= 1 )
+	{
+		enable_ranking = true;
+	}
+	else
+	{
+		enable_ranking = false;
+	}
+}
+
+public PluginAdverts()
+{
+	new iPlayers[32],iNum
+	get_players(iPlayers,iNum)
+	for(new i=0;i<iNum;i++)
+	{
+		new id=iPlayers[i]
+		if(is_user_connected(id))
+		{
+			new GetRandom = random_num(0, 2)
+
+			switch (GetRandom)
+			{
+				case 0:
+				{
+					new Float:SetTime = 8.0
+					set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
+					show_hudmessage(id, "[BB STATS] Want to see what commands you can write? write /bbhelp")
+				}
+				case 1:
+				{
+					new Float:SetTime = 6.0
+					set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
+					show_hudmessage(id, "[BB STATS] Want to reset your points? write /reset")
+				}
+				case 2:
+				{
+					new Float:SetTime = 8.0
+					set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
+					show_hudmessage(id, "[BB STATS] This server is using BrainBread Stats Version %s by JonnyBoy0719", VERSION)
+				}
 			}
 		}
 	}
@@ -215,6 +388,28 @@ public client_connect(id)
 	LoadStatsForPlayerDone[id] = false;
 	LoadMyPoints[id] = false;
 	HasSpawned[id] = false;
+	LoadMyPointsOnce[id] = false;
+	// Connected
+	new players[32],num,i;
+	get_players(players, num)
+	for (i=0; i<num; i++)
+	{
+		if (is_user_connected(players[i]) && !is_user_bot(players[i]))
+		{
+			new plyname[32], auth[33]
+			get_user_authid(id, auth, 32)
+			get_user_name(id, plyname, 31)
+
+			if (is_user_admin(players[i]))
+			{
+				client_print ( players[i], print_chat, "Player %s <^"%s^"> has joined the game", plyname, auth )
+			}
+			else
+			{
+				client_print ( players[i], print_chat, "Player %s has joined the game", plyname )
+			}
+		}
+	}
 }
 
 public PluginThink(id)
@@ -230,11 +425,45 @@ public PluginThink(id)
 public OnPlayerSpawn(id) {
 	if(!LoadStatsForPlayerDone[id])
 	{
+		HelpOnConnect(id)
 		new auth[33];
 		get_user_authid( id, auth, 32);
 		CreateStats(id, auth)
 	}
 } 
+
+public HelpOnConnect(id)
+{
+	new hostname[101], plyname[32]
+	get_user_name(0,hostname,100)
+	get_user_name(id, plyname, 31)
+
+	if ( enable_ranking )
+	{
+		new Position = GetPosition(id);
+		ply_rank = Position;
+		client_print ( id, print_chat, "Welcome %s to %s! You are on rank %d.", plyname, hostname, ply_rank  )
+	}
+	else
+		client_print ( id, print_chat, "Welcome %s to %s!", plyname, hostname )
+
+	BBHelp(id,false)
+}
+
+public ShowStatsOnSpawn(id)
+{
+	new players[32],num,i;
+	get_players(players, num)
+	for (i=0; i<num; i++)
+	{
+		if (is_user_connected(players[i]) && !is_user_bot(players[i]))
+		{
+			new plyname[32]
+			get_user_name(id, plyname, 31)
+			client_print ( players[i], print_chat, "%s is %s. Ranked %d of %d.", plyname, rank_name, ply_rank, top_rank )
+		}
+	}
+}
 
 public client_disconnect(id)
 {
@@ -248,6 +477,28 @@ public client_disconnect(id)
 	LoadStatsForPlayer[id] = false;
 	LoadStatsForPlayerDone[id] = false;
 	LoadMyPoints[id] = false;
+	LoadMyPointsOnce[id] = false;
+	// Disconnected
+	new players[32],num,i;
+	get_players(players, num)
+	for (i=0; i<num; i++)
+	{
+		if (is_user_connected(players[i]) && !is_user_bot(players[i]))
+		{
+			new plyname[32], auth[33]
+			get_user_authid(id, auth, 32)
+			get_user_name(id, plyname, 31)
+
+			if (is_user_admin(players[i]))
+			{
+				client_print ( players[i], print_chat, "Player %s <^"%s^"> has left the game", plyname, auth )
+			}
+			else
+			{
+				client_print ( players[i], print_chat, "Player %s has left the game", plyname )
+			}
+		}
+	}
 }
 
 SaveLevel(id, auth[])
@@ -320,18 +571,22 @@ ChangeAutoLoad(id, auth[])
 		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
 	}
 
-	new table[32], sql_autload
+	new table[32], sql_autload, AutoLoadStatus[32]
 	
 	if (AutoLoad[id])
 	{
 		sql_autload = 0;
 		AutoLoad[id] = false;
+		AutoLoadStatus = "disabled";
 	}
 	else
 	{
 		sql_autload = 1;
 		AutoLoad[id] = true;
+		AutoLoadStatus = "Enabled";
 	}
+
+	client_print ( id, print_chat, "You now have Skills AutoLoad %s.", AutoLoadStatus )
 
 	get_cvar_string("bb_table", table, 31)
 
@@ -379,15 +634,34 @@ LoadLevel(id, auth[])
 			server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
 		}
 
-		new table[32]
+		new table[32], table2[32]
 
 		get_cvar_string("bb_table", table, 31)
+		get_cvar_string("bb_rank_table", table2, 31)
 
 		new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+		new Handle:query_g = SQL_PrepareQuery(sql, "SELECT `authid` FROM `%s`", table)
+
+		// This is a pretty basic code, get all people from the database.
+		if (!SQL_Execute(query_g))
+		{
+			server_print("query not loaded")
+			SQL_QueryError(query_g, error, 127)
+			server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+		} else {
+			while (SQL_MoreResults(query_g))
+			{
+				rank_max++;
+				SQL_NextRow(query_g);
+			}
+		}
+		SQL_FreeHandle(query_g);
+		
+		new get_sql_lvl
 
 		if (!SQL_Execute(query))
 		{
-			server_print("query not saved")
+			server_print("query not loaded")
 			SQL_QueryError(query, error, 127)
 			server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
 		} else {
@@ -417,7 +691,9 @@ LoadLevel(id, auth[])
 				sql_speed = SQL_ReadResult(query, speed);
 				sql_points = SQL_ReadResult(query, points);
 				sql_autoload = SQL_ReadResult(query, autoload);
+				get_sql_lvl = sql_lvl
 
+				// The player stats, only shows on the console once.
 				//*
 				server_print("-------")
 				server_print("LVL: %d", sql_lvl);
@@ -430,12 +706,19 @@ LoadLevel(id, auth[])
 				server_print("-------")
 				//*/
 
+				// We don't want to make this exploitable, so if autoload is enabled, you can't die again, and if its disabled, or if you write /loadpoints.
 				if(sql_autoload == 1 || LoadMyPoints[id])
 				{
-					fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
 					AutoLoad[id] = true;
+					if(!LoadMyPointsOnce[id])
+						fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
 					if (LoadMyPoints[id])
+					{
 						LoadMyPoints[id] = false;
+						LoadMyPointsOnce[id] = true;
+					}
+					if (sql_autoload == 1)
+						LoadMyPointsOnce[id] = true;
 				}
 				else
 					AutoLoad[id] = false;
@@ -451,10 +734,82 @@ LoadLevel(id, auth[])
 			}
 		}
 
+		// This will read the player LVL and then give him the title he needs
+		new Handle:query2 = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE `lvl` <= (%d) and `lvl` ORDER BY abs(`lvl` - %d) LIMIT 1", table2, get_sql_lvl, get_sql_lvl)
+		if (!SQL_Execute(query2))
+		{
+			server_print("query not loaded")
+			SQL_QueryError(query2, error, 127)
+			server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+		} else {
+			while (SQL_MoreResults(query2))
+			{
+				// Not the best code, this needs improvements...
+				new ranktitle[185]
+				SQL_ReadResult(query2, 1, ranktitle, 31)
+				// This only gets the max players on the database
+				top_rank = rank_max
+				// This reads the players EXP, and then checks with other players EXP to get the players rank
+				new Position = GetPosition(id);
+				ply_rank = Position
+				// Gets your current title of your level
+				rank_name = ranktitle
+				SQL_NextRow(query2);
+			}
+		}
+
+		SQL_FreeHandle(query2);
 		SQL_FreeHandle(query);
 		SQL_FreeHandle(sql);
 		SQL_FreeHandle(info);
 	}
+}
+
+GetPosition(id)
+{
+	static Position;
+
+	// If used, lets reset it
+	Position = 0;
+
+	new error[128], errno
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT `authid` FROM `%s` ORDER BY `exp` + 0 DESC", table)
+
+	// This is a pretty basic code, get all people from the database.
+	if (!SQL_Execute(query))
+	{
+		server_print("GetPosition not loaded")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		while (SQL_MoreResults(query))
+		{
+			Position++
+			new authid[33]
+			SQL_ReadResult(query, 0, authid, 32)
+			new auth_self[33];
+			get_user_authid(id, auth_self, 32);
+			if (equal(auth_self, authid))
+				return Position;
+			SQL_NextRow(query);
+		}
+	}
+	SQL_FreeHandle(query);
+	SQL_FreeHandle(sql);
+	SQL_FreeHandle(info);
+	return 0;
 }
 
 CreateStats(id, auth[])
