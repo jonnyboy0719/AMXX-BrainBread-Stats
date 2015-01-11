@@ -15,7 +15,7 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"2.0"
+#define VERSION	"2.2"
 
 new lastfrags[33]
 new lastDeadflag[33]
@@ -34,7 +34,7 @@ new setranking, rank_name[185], ply_rank, top_rank;
 // Need to re-write this so it will read the %s
 new const szTables[][] = 
 {
-	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `exp` TEXT DEFAULT NULL, `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, `autoload` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;",
+	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `name` TEXT DEFAULT NULL, `exp` TEXT DEFAULT NULL, `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, `autoload` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;",
 	"CREATE TABLE IF NOT EXISTS `bb_stats_rank` ( `id` bigint(20) NOT NULL DEFAULT '0', `lvl` int(11) DEFAULT NULL, `title` text NOT NULL, PRIMARY KEY (`id`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
 }
 
@@ -57,7 +57,7 @@ public plugin_init() {
 	register_cvar ("bb_rank_table", "bb_stats_rank"); // The table where it will save the information
 	register_cvar ("bb_filerewrite", "0"); // This will re-write the player data file if sv_savexp is not on 0
 	register_cvar ("bb_gameinfo", "1"); // This will enable GameInformation to be overwritten.
-	register_cvar ("bb_webstats_url", "mysite.net"); // This will display the webstats (TODO: make an option for showing for MOTD or just text; bb_webstats_type 0 | 1)
+	register_cvar ("bb_webstats_url", "mysite.net"); // This will display the webstats
 	setranking = register_cvar ("bb_ranking", "1"); // This will enable ranking, or simply disable it.
 
 	// Client commands
@@ -138,8 +138,8 @@ public StatsVersion(id)
 
 public ShowWebStats(id)
 {
-	new WEBPLACE[185]
-	get_cvar_string("bb_webstats_url",WEBPLACE,184)
+	new WEBPLACE[585]
+	get_cvar_string("bb_webstats_url",WEBPLACE,584)
 	new Float:SetTime = 8.0
 	set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
 	show_hudmessage(id, "Webstats URL: %s", WEBPLACE )
@@ -169,9 +169,8 @@ public BBHelp(id, ShowCommands)
 		if ( enable_ranking )
 		{
 			client_print ( id, print_console, "==----------[[ BB RANKING ]]-------------==" )
-	//		client_print ( id, print_console, "/top10		--		Shows the top10 players" ) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+			client_print ( id, print_console, "/top10		--		Shows the top10 players" )
 			client_print ( id, print_console, "/rank		--		Shows your rank" )
-	//		client_print ( id, print_console, "/ranking		--		Shows a menu of everyone's ranking" ) // TODO: Make sure it reads radio1 to radio3, so it shows up!
 			client_print ( id, print_console, "/web			--		Shows webstats url" )
 		}
 		client_print ( id, print_console, "==--------------------------------------==" )
@@ -179,7 +178,7 @@ public BBHelp(id, ShowCommands)
 	else
 	{
 		if ( enable_ranking )
-			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats /rank /web", VERSION )
+			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats /rank /web /top10", VERSION )
 		else
 			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats", VERSION )
 	}
@@ -212,12 +211,12 @@ public hook_say(id)
 	{
 		StatsVersion(id)
 	}
-	
+
 	if ( enable_ranking )
 	{
 		if (equali(said[0], "/top10")) // TODO: Make sure it reads radio1 to radio3, so it shows up!
 		{
-		//	StatsVersion(id)
+			ShowTop10(id)
 		}
 		else if (equali(said[0], "/rank"))
 		{
@@ -227,13 +226,58 @@ public hook_say(id)
 		{
 			ShowWebStats(id)
 		}
-		else if (equali(said[0], "/ranking")) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+	}
+
+	return PLUGIN_CONTINUE
+}
+
+public ShowTop10(id)
+{
+	static getnum
+
+	// Lets not bug the top10 by adding more when we write /top10
+	getnum = 0
+
+	new menuBody[215]
+	new len = format(menuBody, 214, "\yBB Stats -- Top10^n\w^n")
+
+	new error[128], errno
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32], name[33]
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT `name` FROM `%s` ORDER BY `exp` + 0 DESC LIMIT 10", table)
+
+	// This is a pretty basic code, get all people from the database.
+	if (!SQL_Execute(query))
+	{
+		server_print("GetPosition not loaded")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		while (SQL_MoreResults(query))
 		{
-		//	StatsVersion(id)
+			SQL_ReadResult(query, 0, name, 32)
+			len += format(menuBody[len], 214-len, "#\%d. %s^n", ++getnum, name)
+
+			SQL_NextRow(query);
 		}
 	}
-	
-	return PLUGIN_CONTINUE
+	SQL_FreeHandle(query);
+	SQL_FreeHandle(sql);
+	SQL_FreeHandle(info);
+
+	show_menu(id, getnum, menuBody)
+
+	return PLUGIN_CONTINUE;
 }
 
 public PluginThinkLoop()
@@ -551,7 +595,9 @@ SaveLevel(id, auth[])
 		server_print("SPEED: %d", speed)
 		server_print("POINTS: %d", points)
 */
-		SQL_QueryAndIgnore(sql, "REPLACE INTO `%s` (`authid`, `exp`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`, `autoload`) VALUES ('%s', %i, %d, %d, %d, %d, %d, %d);", table, auth, floatround(GetEXP), level, hps, skill, speed, points, sql_autload )
+		new plyname[32]
+		get_user_name(id,plyname,31)
+		SQL_QueryAndIgnore(sql, "REPLACE INTO `%s` (`authid`, `name`, `exp`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`, `autoload`) VALUES ('%s', '%s', %i, %d, %d, %d, %d, %d, %d);", table, auth, plyname, floatround(GetEXP), level, hps, skill, speed, points, sql_autload )
 	}
 
 	SQL_FreeHandle(query)
@@ -608,6 +654,8 @@ ChangeAutoLoad(id, auth[])
 
 LoadLevel(id, auth[])
 {
+	// This will fix some minor bugs when joining.
+	rank_max = 0
 	new error[128], errno
 	new filename[256]
 	new player_data[64]
@@ -666,7 +714,11 @@ LoadLevel(id, auth[])
 			server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
 		} else {
 			server_print("loaded stats for:^nID: ^"%s^"", auth)
-			
+
+			LoadStatsForPlayer[id] = false;
+			LoadStatsForPlayerDone[id] = true;
+			HasSpawned[id] = true;
+
 			new hps, skill, lvl, speed, points, exp, autoload;
 			exp = SQL_FieldNameToNum(query, "exp");
 			lvl = SQL_FieldNameToNum(query, "lvl");
@@ -680,10 +732,6 @@ LoadLevel(id, auth[])
 
 			while (SQL_MoreResults(query))
 			{
-				LoadStatsForPlayer[id] = false;
-				LoadStatsForPlayerDone[id] = true;
-				HasSpawned[id] = true;
-
 				sql_lvl = SQL_ReadResult(query, lvl);
 				sql_exp = SQL_ReadResult(query, exp);
 				sql_hps = SQL_ReadResult(query, hps);
@@ -842,7 +890,10 @@ CreateStats(id, auth[])
 		console_print(id, "Adding to database:^nID: ^"%s^"", auth)
 		server_print("Adding to database:^nID: ^"%s^"", auth)
 
-		SQL_QueryAndIgnore(sql, "INSERT INTO `%s` (`authid`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`) VALUES ('%s', 0, 0, 0, 0, 0)", table, auth)
+		new plyname[32]
+		get_user_name(id,plyname,31)
+
+		SQL_QueryAndIgnore(sql, "INSERT INTO `%s` (`authid`, `name`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`) VALUES ('%s', '%s' 0, 0, 0, 0, 0)", table, auth, plyname)
 		LoadStatsForPlayer[id] = true;
 	}
 
