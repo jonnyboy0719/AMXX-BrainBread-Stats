@@ -18,3 +18,4 @@ Now open `configs/sql.cfg` and add the new commands:
 `bb_type			"mysql"`  
 `bb_dbname			"my_database"`  
 `bb_table			"bb_stats"`  
+`bb_rank_table			"bb_stats_rank"`  
