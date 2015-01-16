@@ -15,7 +15,7 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"2.2"
+#define VERSION	"2.3"
 
 new lastfrags[33]
 new lastDeadflag[33]
@@ -27,6 +27,7 @@ new bool:LoadMyPointsOnce[33];
 new bool:LoadMyPoints[33];
 new bool:enable_ranking=false;
 new rank_max = 0
+new get_sql_lvl
 new Handle:g_hTuple;
 new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type;
 new setranking, rank_name[185], ply_rank, top_rank;
@@ -149,6 +150,11 @@ public ShowWebStats(id)
 
 public ShowMyRank(id)
 {
+	new Position = GetPosition(id);
+	ply_rank = Position;
+	new auth[33];
+	get_user_authid( id, auth, 32);
+	LoadLevel(id, auth)
 	client_print ( id, print_chat, "you are on rank %d of %d with the title: ^"%s^"", ply_rank, top_rank, rank_name )
 	return PLUGIN_HANDLED
 }
@@ -178,9 +184,9 @@ public BBHelp(id, ShowCommands)
 	else
 	{
 		if ( enable_ranking )
-			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats /rank /web /top10", VERSION )
+			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /rank /top10", VERSION )
 		else
-			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints /bbstats", VERSION )
+			client_print ( id, print_chat, "Available commands: /bbhelp /reset /autoload /loadpoints", VERSION )
 	}
 	return PLUGIN_HANDLED
 }
@@ -214,7 +220,7 @@ public hook_say(id)
 
 	if ( enable_ranking )
 	{
-		if (equali(said[0], "/top10")) // TODO: Make sure it reads radio1 to radio3, so it shows up!
+		if (equali(said[0], "/top10"))
 		{
 			ShowTop10(id)
 		}
@@ -328,7 +334,7 @@ public PluginAdverts()
 		new id=iPlayers[i]
 		if(is_user_connected(id))
 		{
-			new GetRandom = random_num(0, 2)
+			new GetRandom = random_num(0, 4)
 
 			switch (GetRandom)
 			{
@@ -349,6 +355,10 @@ public PluginAdverts()
 					new Float:SetTime = 8.0
 					set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
 					show_hudmessage(id, "[BB STATS] This server is using BrainBread Stats Version %s by JonnyBoy0719", VERSION)
+				}
+				
+				default:
+				{
 				}
 			}
 		}
@@ -704,8 +714,6 @@ LoadLevel(id, auth[])
 			}
 		}
 		SQL_FreeHandle(query_g);
-		
-		new get_sql_lvl
 
 		if (!SQL_Execute(query))
 		{
