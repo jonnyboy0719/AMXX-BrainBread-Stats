@@ -15,7 +15,7 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"2.3"
+#define VERSION	"2.4"
 
 new lastfrags[33]
 new lastDeadflag[33]
@@ -154,7 +154,7 @@ public ShowMyRank(id)
 	ply_rank = Position;
 	new auth[33];
 	get_user_authid( id, auth, 32);
-	LoadLevel(id, auth)
+	LoadLevel(id, auth, false)
 	client_print ( id, print_chat, "you are on rank %d of %d with the title: ^"%s^"", ply_rank, top_rank, rank_name )
 	return PLUGIN_HANDLED
 }
@@ -662,7 +662,7 @@ ChangeAutoLoad(id, auth[])
 	SQL_FreeHandle(info)
 }
 
-LoadLevel(id, auth[])
+LoadLevel(id, auth[], LoadMyStats = true)
 {
 	// This will fix some minor bugs when joining.
 	rank_max = 0
@@ -749,42 +749,45 @@ LoadLevel(id, auth[])
 				sql_autoload = SQL_ReadResult(query, autoload);
 				get_sql_lvl = sql_lvl
 
-				// The player stats, only shows on the console once.
-				//*
-				server_print("-------")
-				server_print("LVL: %d", sql_lvl);
-				server_print("EXP: %f", float(sql_exp));
-				server_print("HPS: %d", sql_hps);
-				server_print("SKILL: %d", sql_skill);
-				server_print("SPEED: %d", sql_speed);
-				server_print("POINTS: %d", sql_points);
-				server_print("AUTOLOAD: %d", sql_autoload);
-				server_print("-------")
-				//*/
-
-				// We don't want to make this exploitable, so if autoload is enabled, you can't die again, and if its disabled, or if you write /loadpoints.
-				if(sql_autoload == 1 || LoadMyPoints[id])
+				if (LoadMyStats)
 				{
-					AutoLoad[id] = true;
-					if(!LoadMyPointsOnce[id])
-						fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
-					if (LoadMyPoints[id])
-					{
-						LoadMyPoints[id] = false;
-						LoadMyPointsOnce[id] = true;
-					}
-					if (sql_autoload == 1)
-						LoadMyPointsOnce[id] = true;
-				}
-				else
-					AutoLoad[id] = false;
+					// The player stats, only shows on the console once.
+					//*
+					server_print("-------")
+					server_print("LVL: %d", sql_lvl);
+					server_print("EXP: %f", float(sql_exp));
+					server_print("HPS: %d", sql_hps);
+					server_print("SKILL: %d", sql_skill);
+					server_print("SPEED: %d", sql_speed);
+					server_print("POINTS: %d", sql_points);
+					server_print("AUTOLOAD: %d", sql_autoload);
+					server_print("-------")
+					//*/
 
-				bb_set_user_level(id, sql_lvl);
-				bb_set_user_exp(id, float(sql_exp));
-				bb_set_user_hps(id, sql_hps);
-				bb_set_user_skill(id, sql_skill);
-				bb_set_user_speed(id, sql_speed);
-				bb_set_user_points(id, sql_points);
+					// We don't want to make this exploitable, so if autoload is enabled, you can't die again, and if its disabled, or if you write /loadpoints.
+					if(sql_autoload == 1 || LoadMyPoints[id])
+					{
+						AutoLoad[id] = true;
+						if(!LoadMyPointsOnce[id])
+							fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
+						if (LoadMyPoints[id])
+						{
+							LoadMyPoints[id] = false;
+							LoadMyPointsOnce[id] = true;
+						}
+						if (sql_autoload == 1)
+							LoadMyPointsOnce[id] = true;
+					}
+					else
+						AutoLoad[id] = false;
+
+					bb_set_user_level(id, sql_lvl);
+					bb_set_user_exp(id, float(sql_exp));
+					bb_set_user_hps(id, sql_hps);
+					bb_set_user_skill(id, sql_skill);
+					bb_set_user_speed(id, sql_speed);
+					bb_set_user_points(id, sql_points);
+				}
 
 				SQL_NextRow(query);
 			}
