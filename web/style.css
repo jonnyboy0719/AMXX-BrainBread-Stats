@@ -1,0 +1,47 @@
+table {
+	font-family: Verdana,Tahoma;
+	font-size: 10px;
+	color: #383B3F;
+}
+div.catrow {
+	font-family: Verdana;
+	font-size: 12px;
+	color: #535D66;
+	font-weight: bold;
+	background-image: url("images/icicle_gradient_grey.gif");
+	background-repeat: repeat;
+}
+a,
+a:visited {
+	text-decoration: none;
+	font-weight: bold;
+	font-size: 13px;
+	color: #535D66;
+	font-family: Verdana;
+}
+th.toprow {
+	font-family: Verdana;
+	font-size: 9px;
+	color: #EAF0F5;
+	background-image: url("images/icicle_gradient_blue.gif");
+	background-repeat: repeat;
+}
+td.row1 {
+	background-color: #E9EEF3;
+	font-family: Verdana;
+	font-size: 13px;
+	color: #494957;
+}
+td.row2 {
+	background-color: #F1F4F7;
+	font-family: Verdana;
+	font-size: 12px;
+	color: #494957;
+}
+.steamprofile {
+	float: left;
+}
+
+td.row2:hover {
+	background-color: wheat;
+}

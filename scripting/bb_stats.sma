@@ -9,13 +9,14 @@
 
 #include <amxmodx>
 #include <amxmisc>
+#include <geoip>
 #include <brainbread>
 #include <fakemeta>
 #include <sqlx>
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"2.4"
+#define VERSION	"2.5"
 
 new lastfrags[33]
 new lastDeadflag[33]
@@ -35,7 +36,7 @@ new setranking, rank_name[185], ply_rank, top_rank;
 // Need to re-write this so it will read the %s
 new const szTables[][] = 
 {
-	"CREATE TABLE IF NOT EXISTS `bb_stats` ( `authid` varchar(32) NOT NULL, `name` TEXT DEFAULT NULL, `exp` TEXT DEFAULT NULL, `lvl` int(11) DEFAULT NULL, `skill_hp` int(11) DEFAULT NULL, `skill_skill` int(11) DEFAULT NULL, `skill_speed` int(11) DEFAULT NULL, `points` int(11) DEFAULT NULL, `autoload` int(11) DEFAULT NULL, PRIMARY KEY (`authid`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;",
+	"CREATE TABLE IF NOT EXISTS `bb_stats` (  `authid` varchar(32) NOT NULL,  `name` text,  `exp` text,  `lvl` int(11) DEFAULT NULL,  `skill_hp` int(11) DEFAULT NULL,  `skill_skill` int(11) DEFAULT NULL,  `skill_speed` int(11) DEFAULT NULL,  `points` int(11) DEFAULT NULL,  `autoload` int(11) DEFAULT NULL,  `date` int(11) DEFAULT '1112214021',  `online` varchar(50) DEFAULT 'false',  `country` varchar(50) DEFAULT NULL,  PRIMARY KEY (`authid`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;",
 	"CREATE TABLE IF NOT EXISTS `bb_stats_rank` ( `id` bigint(20) NOT NULL DEFAULT '0', `lvl` int(11) DEFAULT NULL, `title` text NOT NULL, PRIMARY KEY (`id`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
 }
 
@@ -526,6 +527,8 @@ public client_disconnect(id)
 		new auth[33];
 		get_user_authid( id, auth, 32);
 		SaveLevel(id, auth)
+		SaveDate(auth);
+		UpdateConnection(id, auth,false);
 		HasSpawned[id] = false;
 	}
 	LoadStatsForPlayer[id] = false;
@@ -579,22 +582,13 @@ SaveLevel(id, auth[])
 		SQL_QueryError(query, error, 127)
 		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
 	} else {
-		new hps, skill, level, speed, points, sql_autload;
+		new hps, skill, level, speed, points;
 		hps = bb_get_user_hps(id);
 		skill = bb_get_user_skill(id);
 		level = bb_get_user_level(id);
 		speed = bb_get_user_speed(id);
 		points = bb_get_user_points(id);
 		new Float:GetEXP = bb_get_user_exp(id)
-
-		if (AutoLoad[id])
-		{
-			sql_autload = 1;
-		}
-		else
-		{
-			sql_autload = 0;
-		}
 /*
 		server_print("Saved stats:")
 		server_print("ID: %s", id)
@@ -607,7 +601,82 @@ SaveLevel(id, auth[])
 */
 		new plyname[32]
 		get_user_name(id,plyname,31)
-		SQL_QueryAndIgnore(sql, "REPLACE INTO `%s` (`authid`, `name`, `exp`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`, `autoload`) VALUES ('%s', '%s', %i, %d, %d, %d, %d, %d, %d);", table, auth, plyname, floatround(GetEXP), level, hps, skill, speed, points, sql_autload )
+		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `exp` = %i, `lvl` = %d, `skill_hp` = %d, `skill_skill` = %d, `skill_speed` = %d, `points` = %d WHERE `authid` = '%s';", table, floatround(GetEXP), level, hps, skill, speed, points, auth )
+	}
+
+	SQL_FreeHandle(query)
+	SQL_FreeHandle(sql)
+	SQL_FreeHandle(info)
+}
+
+UpdateConnection(client, auth[],IsOnline=true)
+{
+	new error[128], errno
+	new countrycode[3]
+	new ip[33][32]
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	if(IsOnline)
+	{
+		get_user_ip(client,ip[client],31)
+		geoip_code2(ip[client],countrycode)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not saved")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		if (IsOnline)
+			SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `online` = 'true',`country` = '%s' WHERE `authid` = '%s';", table, countrycode, auth )
+		else
+			SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `online` = 'false' WHERE `authid` = '%s';", table, auth )
+	}
+
+	SQL_FreeHandle(query)
+	SQL_FreeHandle(sql)
+	SQL_FreeHandle(info)
+}
+
+SaveDate(auth[])
+{
+	new error[128], errno
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not saved")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `date` = UNIX_TIMESTAMP(NOW()) WHERE `authid` = '%s';", table, auth )
 	}
 
 	SQL_FreeHandle(query)
@@ -763,6 +832,8 @@ LoadLevel(id, auth[], LoadMyStats = true)
 					server_print("AUTOLOAD: %d", sql_autoload);
 					server_print("-------")
 					//*/
+					SaveDate(auth);
+					UpdateConnection(id, auth);
 
 					// We don't want to make this exploitable, so if autoload is enabled, you can't die again, and if its disabled, or if you write /loadpoints.
 					if(sql_autoload == 1 || LoadMyPoints[id])
