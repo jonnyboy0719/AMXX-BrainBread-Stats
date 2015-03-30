@@ -1,6 +1,6 @@
 <?php
-	$mysql_host = "localhost";
-	$mysql_db	= "my_db";
-	$mysql_name	= "root";
-	$mysql_pass = "";
+	$mysql_host = "127.0.0.1";		// hostname
+	$mysql_db	= "my_db";			// database
+	$mysql_name	= "my_user";		// user
+	$mysql_pass = "my_password";	// password
 ?>
