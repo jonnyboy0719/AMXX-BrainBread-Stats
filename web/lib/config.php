@@ -1,6 +1,6 @@
 <?php
-	$mysql_host = "31.186.250.26";
-	$mysql_db	= "game_servers_hl";
-	$mysql_name	= "steamcmd";
-	$mysql_pass = "steamcmd";
+	$mysql_host = "localhost";
+	$mysql_db	= "my_db";
+	$mysql_name	= "root";
+	$mysql_pass = "";
 ?>
