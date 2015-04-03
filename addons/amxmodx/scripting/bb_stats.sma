@@ -237,7 +237,6 @@ public AnnounceNewLevel(id, newlvl)
 {
 	new Position = GetPosition(id);
 	ply_rank = Position;
-	client_print ( id, print_chat, "you are on rank %d of %d with the title: ^"%s^"", ply_rank, top_rank, rank_name )
 	// Connected
 	new players[32],num,i;
 	get_players(players, num)
