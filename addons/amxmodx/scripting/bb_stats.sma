@@ -7,46 +7,64 @@
 //
 //=============================================================================
 
+//------------------
+//	Include Files
+//------------------
+
 #include <amxmodx>
 #include <amxmisc>
 #include <geoip>
 #include <brainbread>
 #include <fakemeta>
 #include <sqlx>
+#include <fun>
+
+//------------------
+//	Defines
+//------------------
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"2.5"
+#define VERSION	"2.6"
 
+//------------------
+//	Handles & more
+//------------------
+
+new const lvlupsnd[] = "sound/misc/levelup.wav" 
 new lastfrags[33]
 new lastDeadflag[33]
-new bool:LoadStatsForPlayer[33];
-new bool:LoadStatsForPlayerDone[33];
-new bool:HasSpawned[33];
-new bool:AutoLoad[33];
-new bool:LoadMyPointsOnce[33];
-new bool:LoadMyPoints[33];
-new bool:enable_ranking=false;
+new bool:LoadStatsForPlayer[33]
+new bool:LoadStatsForPlayerDone[33]
+new bool:HasSpawned[33]
+new bool:AutoLoad[33]
+new bool:LoadMyPointsOnce[33]
+new bool:LoadMyPoints[33]
+new bool:enable_ranking=false
+new g_oldangles[33][3]
 new rank_max = 0
 new get_sql_lvl
-new Handle:g_hTuple;
-new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type;
-new setranking, rank_name[185], ply_rank, top_rank;
+// Global stuff
+new gb_sql_kills,gb_sql_kills_player,gb_sql_gametime
+new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type
+new setranking, rank_name[185], ply_rank, top_rank
 
-// Need to re-write this so it will read the %s
-new const szTables[][] = 
-{
-	"CREATE TABLE IF NOT EXISTS `bb_stats` (  `authid` varchar(32) NOT NULL,  `name` text,  `exp` text,  `lvl` int(11) DEFAULT NULL,  `skill_hp` int(11) DEFAULT NULL,  `skill_skill` int(11) DEFAULT NULL,  `skill_speed` int(11) DEFAULT NULL,  `points` int(11) DEFAULT NULL,  `autoload` int(11) DEFAULT NULL,  `date` int(11) DEFAULT '1112214021',  `online` varchar(50) DEFAULT 'false',  `country` varchar(50) DEFAULT NULL,  PRIMARY KEY (`authid`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;",
-	"CREATE TABLE IF NOT EXISTS `bb_stats_rank` ( `id` bigint(20) NOT NULL DEFAULT '0', `lvl` int(11) DEFAULT NULL, `title` text NOT NULL, PRIMARY KEY (`id`) ) ENGINE=MyISAM DEFAULT CHARSET=latin1;"
-}
+//------------------
+//	plugin_init()
+//------------------
 
 public plugin_init() {
 	register_plugin(PLUGIN, VERSION, AUTHOR);
 	register_cvar("bbstats_version", VERSION, FCVAR_SPONLY|FCVAR_SERVER)
+	
 	set_cvar_string("bbstats_version", VERSION)
 
 	register_forward(FM_PlayerPreThink,"PluginThink")
-	register_forward(FM_GetGameDescription,"GameInformation")  
+	register_forward(FM_GetGameDescription,"GameInformation")
+	
+	register_event("DeathMsg", "EVENT_PlayerDeath", "a")
+
+	set_task(1.0,"CheckGameTime",_,_,_,"b")
 	set_task(1.0,"PluginThinkLoop",0,"",0,"b")
 	set_task(30.0,"PluginAdverts",0,"",0,"b")
 
@@ -72,9 +90,51 @@ public plugin_init() {
 	register_clcmd("say","hook_say")
 	register_clcmd("say_team","hook_say")
 
-	CreateTables()
 	PlayerDataFile()
 }
+
+//------------------
+//	plugin_precache()
+//------------------
+
+public plugin_precache()
+{
+	precache_sound("misc/levelup.wav")
+}
+
+//------------------
+//	EVENT_PlayerDeath()
+//------------------
+
+public EVENT_PlayerDeath()
+{
+	new killer = read_data(1);	// Killer
+	new victim = read_data(2);	// Victim
+//	new weapon = read_data(3);	// Weapon (doesn't work on BrainBread)
+
+	if (killer == victim)
+		return;
+	
+	// If the ID is 65, then its the zombie.
+	// If the ID is 0, then its the server.
+	if (victim == 0 || victim == 65)
+		return;
+	if (killer == 0 || killer == 65)
+		return;
+	
+	// If its a player we are killing, and not a zombie
+	if (!is_user_bot(victim) && !is_user_hltv(victim) || is_user_alive(killer) && !is_user_bot(killer) && !is_user_hltv(killer))
+	{
+		new auth[33];
+		get_user_authid( killer, auth, 32);
+		SaveLevel(killer, auth);
+		SaveKills(auth,"human_player");
+	}
+}
+
+//------------------
+//	GameInformation()
+//------------------
 
 public GameInformation()
 {
@@ -87,7 +147,11 @@ public GameInformation()
 		return FMRES_SUPERCEDE;
 	}
 	return PLUGIN_HANDLED
-}  
+}
+
+//------------------
+//	ResetSkills()
+//------------------
 
 public ResetSkills(id)
 {
@@ -113,6 +177,10 @@ public ResetSkills(id)
 	return PLUGIN_HANDLED
 }
 
+//------------------
+//	AutoLoadSkills()
+//------------------
+
 public AutoLoadSkills(id)
 {
 	new auth[33];
@@ -120,6 +188,10 @@ public AutoLoadSkills(id)
 	ChangeAutoLoad(id, auth)
 	return PLUGIN_HANDLED
 }
+
+//------------------
+//	LoadPoints()
+//------------------
 
 public LoadPoints(id)
 {
@@ -130,6 +202,10 @@ public LoadPoints(id)
 	return PLUGIN_HANDLED
 }
 
+//------------------
+//	StatsVersion()
+//------------------
+
 public StatsVersion(id)
 {
 	new Float:SetTime = 8.0
@@ -137,6 +213,10 @@ public StatsVersion(id)
 	show_hudmessage(id, "This server is running BB Stats Version %s", VERSION)
 	return PLUGIN_HANDLED
 }
+
+//------------------
+//	ShowWebStats()
+//------------------
 
 public ShowWebStats(id)
 {
@@ -149,6 +229,42 @@ public ShowWebStats(id)
 	return PLUGIN_HANDLED
 }
 
+//------------------
+//	AnnounceNewLevel()
+//------------------
+
+public AnnounceNewLevel(id, newlvl)
+{
+	new Position = GetPosition(id);
+	ply_rank = Position;
+	client_print ( id, print_chat, "you are on rank %d of %d with the title: ^"%s^"", ply_rank, top_rank, rank_name )
+	// Connected
+	new players[32],num,i;
+	get_players(players, num)
+	for (i=0; i<num; i++)
+	{
+		if (is_user_connected(players[i]) && !is_user_bot(players[i]))
+		{
+			new plyname[32], auth[33]
+			
+			get_user_authid(id, auth, 32)
+			get_user_name(id, plyname, 31)
+			
+			new Float:SetTime = 10.0
+			set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
+			client_cmd( players[i] , "spk ^"%s^"", lvlupsnd ) 
+			
+			show_hudmessage ( players[i], "%s has leveled up to %d! Rank: %d of %d with the title: ^"%s^"", plyname, newlvl, ply_rank, top_rank, rank_name )
+			client_print ( players[i], print_chat, "%s has leveled up to %d! Rank: %d of %d with the title: ^"%s^"", plyname, newlvl, ply_rank, top_rank, rank_name )
+		}
+	}
+	return PLUGIN_HANDLED
+}
+
+//------------------
+//	ShowMyRank()
+//------------------
+
 public ShowMyRank(id)
 {
 	new Position = GetPosition(id);
@@ -159,6 +275,10 @@ public ShowMyRank(id)
 	client_print ( id, print_chat, "you are on rank %d of %d with the title: ^"%s^"", ply_rank, top_rank, rank_name )
 	return PLUGIN_HANDLED
 }
+
+//------------------
+//	BBHelp()
+//------------------
 
 public BBHelp(id, ShowCommands)
 {
@@ -191,6 +311,10 @@ public BBHelp(id, ShowCommands)
 	}
 	return PLUGIN_HANDLED
 }
+
+//------------------
+//	hook_say()
+//------------------
 
 public hook_say(id)
 {
@@ -237,6 +361,10 @@ public hook_say(id)
 
 	return PLUGIN_CONTINUE
 }
+
+//------------------
+//	ShowTop10()
+//------------------
 
 public ShowTop10(id)
 {
@@ -287,6 +415,35 @@ public ShowTop10(id)
 	return PLUGIN_CONTINUE;
 }
 
+//------------------
+//	CheckGameTime()
+//------------------
+public CheckGameTime() {
+	for (new i = 1; i <= get_maxplayers(); i++) {
+		if (is_user_alive(i) && is_user_connected(i) && !is_user_bot(i) && !is_user_hltv(i)) {
+			new newangle[3];
+			get_user_origin(i, newangle);
+
+			if ( newangle[0] == g_oldangles[i][0] && newangle[1] == g_oldangles[i][1] && newangle[2] == g_oldangles[i][2] ) {
+				// Don't do anything, because we don't want to give them any gametime points for standing still >:c
+			} else {
+				g_oldangles[i][0] = newangle[0];
+				g_oldangles[i][1] = newangle[1];
+				g_oldangles[i][2] = newangle[2];
+				
+				new auth[33];
+				get_user_authid( i, auth, 32);
+				SaveGameTime(auth);
+			}
+		}
+	}
+	return PLUGIN_HANDLED
+}
+
+//------------------
+//	PluginThinkLoop()
+//------------------
+
 public PluginThinkLoop()
 {
 	new iPlayers[32],iNum
@@ -296,6 +453,7 @@ public PluginThinkLoop()
 		new id=iPlayers[i]
 		if(is_user_connected(id))
 		{
+			new GetCurrentLevel = bb_get_user_level(id);
 			if(get_user_frags(id)>lastfrags[id])
 			{
 				lastfrags[id]=get_user_frags(id)
@@ -303,6 +461,7 @@ public PluginThinkLoop()
 				new auth[33];
 				get_user_authid( id, auth, 32);
 				SaveLevel(id, auth)
+				SaveKills(auth)
 			}
 			if (LoadStatsForPlayer[id])
 			{
@@ -312,6 +471,15 @@ public PluginThinkLoop()
 				StatsVersion(id)
 				if( setranking )
 					ShowStatsOnSpawn(id)
+			}
+			
+			if(get_sql_lvl != GetCurrentLevel && HasSpawned[id])
+			{
+				if(is_user_alive(id))
+				{
+					AnnounceNewLevel(id, GetCurrentLevel);
+					get_sql_lvl = GetCurrentLevel;
+				}
 			}
 		}
 	}
@@ -325,6 +493,10 @@ public PluginThinkLoop()
 		enable_ranking = false;
 	}
 }
+
+//------------------
+//	PluginAdverts()
+//------------------
 
 public PluginAdverts()
 {
@@ -366,6 +538,10 @@ public PluginAdverts()
 	}
 }
 
+//------------------
+//	PlayerDataFile()
+//------------------
+
 public PlayerDataFile()
 {
 	new filename[256]
@@ -379,63 +555,9 @@ public PlayerDataFile()
 	}
 }
 
-// ============================================================//
-//                          [~ Saving datas ~]			       //
-// ============================================================//
-stock Handle:MySQLx_Init(timeout = 0)
-{
-	static szHost[64], szUser[32], szPass[32], szDB[128];
-	static get_type[12], set_type[12];
-	
-	get_pcvar_string( mysqlx_host, szHost, 63 );
-	get_pcvar_string( mysqlx_user, szUser, 31 );
-	get_pcvar_string( mysqlx_type, set_type, 11);
-	get_pcvar_string( mysqlx_pass, szPass, 31 );
-	get_pcvar_string( mysqlx_db, szDB, 127 );
-	
-	SQL_GetAffinity(get_type, 12);
-	
-	if (!equali(get_type, set_type))
-	{
-		if (!SQL_SetAffinity(set_type))
-		{
-			log_amx("Failed to set affinity from %s to %s.", get_type, set_type);
-		}
-	}
-	
-	g_hTuple = SQL_MakeDbTuple( szHost, szUser, szPass, szDB );
-	
-	return SQL_MakeDbTuple( szHost, szUser, szPass, szDB, timeout );
-}
-public CreateTables()
-{
-	new error[128], errno
-
-	new Handle:info = MySQLx_Init()
-	new Handle:sql = SQL_Connect(info, errno, error, 127)
-
-	if (sql == Empty_Handle)
-	{
-		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
-	}
-
-	for ( new i = 0; i < sizeof szTables; i++ )
-	{
-		SQL_ThreadQuery( g_hTuple, "QueryCreateTable", szTables[i]);
-	}
-
-	return PLUGIN_HANDLED;
-}
-public QueryCreateTable( iFailState, Handle:hQuery, szError[ ], iError, iData[ ], iDataSize, Float:fQueueTime ) 
-{ 
-	if( iFailState == TQUERY_CONNECT_FAILED 
-	|| iFailState == TQUERY_QUERY_FAILED ) 
-	{ 
-		log_amx( "%s", szError ); 
-		
-		return;
-	} 
-}
+//------------------
+//	client_connect()
+//------------------
 
 public client_connect(id)
 {
@@ -467,6 +589,10 @@ public client_connect(id)
 	}
 }
 
+//------------------
+//	PluginThink()
+//------------------
+
 public PluginThink(id)
 {
 	new deadflag=pev(id,pev_deadflag)
@@ -477,6 +603,10 @@ public PluginThink(id)
 	lastDeadflag[id]=deadflag
 }
 
+//------------------
+//	OnPlayerSpawn()
+//------------------
+
 public OnPlayerSpawn(id) {
 	if(!LoadStatsForPlayerDone[id])
 	{
@@ -486,6 +616,10 @@ public OnPlayerSpawn(id) {
 		CreateStats(id, auth)
 	}
 } 
+
+//------------------
+//	HelpOnConnect()
+//------------------
 
 public HelpOnConnect(id)
 {
@@ -505,6 +639,10 @@ public HelpOnConnect(id)
 	BBHelp(id,false)
 }
 
+//------------------
+//	ShowStatsOnSpawn()
+//------------------
+
 public ShowStatsOnSpawn(id)
 {
 	new players[32],num,i;
@@ -519,6 +657,10 @@ public ShowStatsOnSpawn(id)
 		}
 	}
 }
+
+//------------------
+//	client_disconnect()
+//------------------
 
 public client_disconnect(id)
 {
@@ -557,6 +699,56 @@ public client_disconnect(id)
 		}
 	}
 }
+
+// ============================================================//
+//                          [~ Saving datas ~]			       //
+// ============================================================//
+
+//------------------
+//	MySQLx_Init()
+//------------------
+stock Handle:MySQLx_Init(timeout = 0)
+{
+	static szHost[64], szUser[32], szPass[32], szDB[128];
+	static get_type[12], set_type[12];
+	
+	get_pcvar_string( mysqlx_host, szHost, 63 );
+	get_pcvar_string( mysqlx_user, szUser, 31 );
+	get_pcvar_string( mysqlx_type, set_type, 11);
+	get_pcvar_string( mysqlx_pass, szPass, 31 );
+	get_pcvar_string( mysqlx_db, szDB, 127 );
+	
+	SQL_GetAffinity(get_type, 12);
+	
+	if (!equali(get_type, set_type))
+	{
+		if (!SQL_SetAffinity(set_type))
+		{
+			log_amx("Failed to set affinity from %s to %s.", get_type, set_type);
+		}
+	}
+	
+	return SQL_MakeDbTuple( szHost, szUser, szPass, szDB, timeout );
+}
+
+//------------------
+//	QueryCreateTable()
+//------------------
+
+public QueryCreateTable( iFailState, Handle:hQuery, szError[ ], iError, iData[ ], iDataSize, Float:fQueueTime ) 
+{ 
+	if( iFailState == TQUERY_CONNECT_FAILED 
+	|| iFailState == TQUERY_QUERY_FAILED ) 
+	{ 
+		log_amx( "%s", szError ); 
+		
+		return;
+	} 
+}
+
+//------------------
+//	SaveLevel()
+//------------------
 
 SaveLevel(id, auth[])
 { 
@@ -609,6 +801,10 @@ SaveLevel(id, auth[])
 	SQL_FreeHandle(info)
 }
 
+//------------------
+//	UpdateConnection()
+//------------------
+
 UpdateConnection(client, auth[],IsOnline=true)
 {
 	new error[128], errno
@@ -652,6 +848,107 @@ UpdateConnection(client, auth[],IsOnline=true)
 	SQL_FreeHandle(info)
 }
 
+//------------------
+//	SaveKills()
+//------------------
+
+SaveKills(auth[],IsType[]="")
+{
+	new error[128], errno
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+	
+	UpdateKills(auth)
+	
+	new set_frags = 1 + gb_sql_kills
+	new set_player_kills = 1 + gb_sql_kills_player
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not saved")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `kills` = '%d' WHERE `authid` = '%s';", table, set_frags, auth )
+		if (equal(IsType,"human_player"))
+			SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `kills_player` = '%d' WHERE `authid` = '%s';", table, set_player_kills, auth );
+	}
+
+	SQL_FreeHandle(query)
+	SQL_FreeHandle(sql)
+	SQL_FreeHandle(info)
+}
+
+//------------------
+//	UpdateKills()
+//------------------
+
+UpdateKills(auth[])
+{
+	new error[128], errno
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not loaded")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		new kills;
+		new kills_player;
+		
+		kills = SQL_FieldNameToNum(query, "kills");
+		kills_player = SQL_FieldNameToNum(query, "kills_player");
+
+		new sql_kills;
+		new sql_kills_player;
+
+		while (SQL_MoreResults(query))
+		{
+			sql_kills = SQL_ReadResult(query, kills);
+			sql_kills_player = SQL_ReadResult(query, kills_player);
+			
+			gb_sql_kills = sql_kills
+			gb_sql_kills_player = sql_kills_player
+			
+			SQL_NextRow(query);
+		}
+	}
+
+	SQL_FreeHandle(query);
+	SQL_FreeHandle(sql);
+	SQL_FreeHandle(info);
+}
+
+//------------------
+//	SaveDate()
+//------------------
+
 SaveDate(auth[])
 {
 	new error[128], errno
@@ -683,6 +980,10 @@ SaveDate(auth[])
 	SQL_FreeHandle(sql)
 	SQL_FreeHandle(info)
 }
+
+//------------------
+//	ChangeAutoLoad()
+//------------------
 
 ChangeAutoLoad(id, auth[])
 { 
@@ -730,6 +1031,10 @@ ChangeAutoLoad(id, auth[])
 	SQL_FreeHandle(sql)
 	SQL_FreeHandle(info)
 }
+
+//------------------
+//	LoadLevel()
+//------------------
 
 LoadLevel(id, auth[], LoadMyStats = true)
 {
@@ -840,7 +1145,12 @@ LoadLevel(id, auth[], LoadMyStats = true)
 					{
 						AutoLoad[id] = true;
 						if(!LoadMyPointsOnce[id])
+						{
+							// Kills the player, so the stats actually get loaded properly.
 							fakedamage(id, "Z0mbeh", 999999.0, DMG_BULLET);
+							// Now lets remove his -2 on the score, because we had to kill him manually.
+							set_user_frags(id, 0);
+						}
 						if (LoadMyPoints[id])
 						{
 							LoadMyPoints[id] = false;
@@ -895,6 +1205,10 @@ LoadLevel(id, auth[], LoadMyStats = true)
 	}
 }
 
+//------------------
+//	GetPosition()
+//------------------
+
 GetPosition(id)
 {
 	static Position;
@@ -942,6 +1256,10 @@ GetPosition(id)
 	return 0;
 }
 
+//------------------
+//	CreateStats()
+//------------------
+
 CreateStats(id, auth[])
 {
 	new error[128], errno
@@ -975,11 +1293,100 @@ CreateStats(id, auth[])
 		new plyname[32]
 		get_user_name(id,plyname,31)
 
-		SQL_QueryAndIgnore(sql, "INSERT INTO `%s` (`authid`, `name`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`) VALUES ('%s', '%s' 0, 0, 0, 0, 0)", table, auth, plyname)
+		SQL_QueryAndIgnore(sql, "INSERT INTO `%s` (`authid`, `name`, `lvl`, `skill_hp`, `skill_skill`, `skill_speed`, `points`) VALUES ('%s', '%s', 0, 0, 0, 0, 0)", table, auth, plyname)
 		LoadStatsForPlayer[id] = true;
+	}
+	
+	SaveDate(auth);
+	UpdateConnection(id, auth);
+
+	SQL_FreeHandle(query)
+	SQL_FreeHandle(sql)
+	SQL_FreeHandle(info)
+}
+
+//------------------
+//	SaveGameTime()
+//------------------
+
+SaveGameTime(auth[])
+{
+	new error[128], errno
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+	
+	UpdateGameTime(auth)
+	
+	new set_gametime = 1 + gb_sql_gametime
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not saved")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `gametime` = '%d' WHERE `authid` = '%s';", table, set_gametime, auth )
 	}
 
 	SQL_FreeHandle(query)
 	SQL_FreeHandle(sql)
 	SQL_FreeHandle(info)
+}
+
+//------------------
+//	UpdateGameTime()
+//------------------
+
+UpdateGameTime(auth[])
+{
+	new error[128], errno
+
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_table", table, 31)
+
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
+
+	if (!SQL_Execute(query))
+	{
+		server_print("query not loaded")
+		SQL_QueryError(query, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		new gtime;
+		gtime = SQL_FieldNameToNum(query, "gametime");
+
+		new sql_gametime;
+
+		while (SQL_MoreResults(query))
+		{
+			sql_gametime = SQL_ReadResult(query, gtime);
+			gb_sql_gametime = sql_gametime
+			SQL_NextRow(query);
+		}
+	}
+
+	SQL_FreeHandle(query);
+	SQL_FreeHandle(sql);
+	SQL_FreeHandle(info);
 }

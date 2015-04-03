@@ -20,6 +20,11 @@ Now open `configs/sql.cfg` and add the new commands:
 `bb_table			"bb_stats"`  
 `bb_rank_table			"bb_stats_rank"`  
 
+Database setup
+-----------
+
+Since version 2.6, all the sql is under `web/database.sql` since the string were to long for AMXX compiler. Simple copy paste it to your PhpMyAdmin, 
+or any SQL Manager that you have installed, into its query, and hit run. But make sure its inside a database, else it will throw errors!
 
 Web GUI
 -----------
