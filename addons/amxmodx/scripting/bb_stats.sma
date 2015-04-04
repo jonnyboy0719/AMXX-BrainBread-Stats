@@ -43,7 +43,7 @@ new bool:LoadMyPoints[33]
 new bool:enable_ranking=false
 new g_oldangles[33][3]
 new rank_max = 0
-new get_sql_lvl
+new get_sql_lvl[33]
 // Global stuff
 new gb_sql_kills,gb_sql_kills_player,gb_sql_gametime
 new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type
@@ -471,13 +471,12 @@ public PluginThinkLoop()
 				if( setranking )
 					ShowStatsOnSpawn(id)
 			}
-			
-			if(get_sql_lvl != GetCurrentLevel && HasSpawned[id])
+			if(HasSpawned[id])
 			{
-				if(is_user_alive(id))
+				if(is_user_alive(id) && GetCurrentLevel > get_sql_lvl[id])
 				{
 					AnnounceNewLevel(id, GetCurrentLevel);
-					get_sql_lvl = GetCurrentLevel;
+					get_sql_lvl[id] = GetCurrentLevel;
 				}
 			}
 		}
@@ -565,6 +564,7 @@ public client_connect(id)
 	LoadMyPoints[id] = false;
 	HasSpawned[id] = false;
 	LoadMyPointsOnce[id] = false;
+	get_sql_lvl[id] = 0;
 	// Connected
 	new players[32],num,i;
 	get_players(players, num)
@@ -1099,7 +1099,7 @@ LoadLevel(id, auth[], LoadMyStats = true)
 			LoadStatsForPlayer[id] = false;
 			LoadStatsForPlayerDone[id] = true;
 			HasSpawned[id] = true;
-
+			
 			new hps, skill, lvl, speed, points, exp, autoload;
 			exp = SQL_FieldNameToNum(query, "exp");
 			lvl = SQL_FieldNameToNum(query, "lvl");
@@ -1120,7 +1120,7 @@ LoadLevel(id, auth[], LoadMyStats = true)
 				sql_speed = SQL_ReadResult(query, speed);
 				sql_points = SQL_ReadResult(query, points);
 				sql_autoload = SQL_ReadResult(query, autoload);
-				get_sql_lvl = sql_lvl
+				get_sql_lvl[id] = sql_lvl
 
 				if (LoadMyStats)
 				{
@@ -1174,7 +1174,7 @@ LoadLevel(id, auth[], LoadMyStats = true)
 		}
 
 		// This will read the player LVL and then give him the title he needs
-		new Handle:query2 = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE `lvl` <= (%d) and `lvl` ORDER BY abs(`lvl` - %d) LIMIT 1", table2, get_sql_lvl, get_sql_lvl)
+		new Handle:query2 = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE `lvl` <= (%d) and `lvl` ORDER BY abs(`lvl` - %d) LIMIT 1", table2, get_sql_lvl[id], get_sql_lvl[id])
 		if (!SQL_Execute(query2))
 		{
 			server_print("query not loaded")
