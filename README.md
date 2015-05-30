@@ -6,6 +6,18 @@ This plugin will save all of your stats to a MySQL server, which multiple server
 Created by: Johan Eherndahl -- [BrainBread 2 Dev Team](http://bb.brainbread2.eu/)  
 Special thanks: Noname -- [Asd2Bam](http://asd2bam.org/)  
 
+
+Commands
+-----------
+`/bbhelp` - Prints all the available commands on the console  
+`/reset` - To reset your skills  
+`/autoload` - Autoloads your points on connection  
+`/loadpoints` - To load your points  
+`/bbstats or /version` - To show the correction  
+`/top10` - Shows the top10 players  
+`/rank` - Shows your rank  
+`/web` - Shows webstats url  
+
 How it Works
 -----------
 
