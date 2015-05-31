@@ -25,7 +25,7 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"Reperio Studios"
-#define VERSION	"2.8"
+#define VERSION	"2.9"
 
 //------------------
 //	Handles & more
@@ -275,7 +275,9 @@ public AnnounceNewLevel(id, newlvl)
 {
 	new Position = GetPosition(id);
 	ply_rank = Position;
-	// Connected
+	// Lets call the GetCurrentRankTitle(id) to make sure we get the title for the player
+	GetCurrentRankTitle(id);
+
 	new players[32],num,i;
 	get_players(players, num)
 	for (i=0; i<num; i++)
@@ -306,6 +308,8 @@ public ShowMyRank(id)
 {
 	new Position = GetPosition(id);
 	ply_rank = Position;
+	// Lets call the GetCurrentRankTitle(id) to make sure we get the title for the player
+	GetCurrentRankTitle(id);
 	new auth[33];
 	get_user_authid( id, auth, 32);
 	LoadLevel(id, auth, false)
@@ -865,7 +869,7 @@ UpdateConnection(client, auth[],IsOnline=true)
 	if(IsOnline)
 	{
 		get_user_ip(client,ip[client],31)
-		geoip_code2(ip[client],countrycode)
+		geoip_code2_ex(ip[client],countrycode)
 	}
 
 	new table[32]
@@ -1235,8 +1239,8 @@ LoadLevel(id, auth[], LoadMyStats = true)
 				// This reads the players EXP, and then checks with other players EXP to get the players rank
 				new Position = GetPosition(id);
 				ply_rank = Position
-				// Gets your current title of your level
-				rank_name = ranktitle
+				// Sets the title
+				rank_name = ranktitle;
 				SQL_NextRow(query2);
 			}
 		}
@@ -1268,10 +1272,9 @@ GetPosition(id)
 		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
 	}
 
-	new table[32], table2[32]
+	new table[32]
 
 	get_cvar_string("bb_table", table, 31)
-	get_cvar_string("bb_rank_table", table2, 31)
 
 	new Handle:query = SQL_PrepareQuery(sql, "SELECT `authid` FROM `%s` ORDER BY `exp` + 0 DESC", table)
 
@@ -1294,27 +1297,50 @@ GetPosition(id)
 			SQL_NextRow(query);
 		}
 	}
-	
+	SQL_FreeHandle(query);
+	SQL_FreeHandle(sql);
+	SQL_FreeHandle(info);
+	return 0;
+}
+
+//------------------
+//	GetCurrentRankTitle()
+//------------------
+
+GetCurrentRankTitle(id)
+{
+	new error[128], errno
+	new Handle:info = MySQLx_Init()
+	new Handle:sql = SQL_Connect(info, errno, error, 127)
+
+	if (sql == Empty_Handle)
+	{
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
+	}
+
+	new table[32]
+
+	get_cvar_string("bb_rank_table", table, 31)
+
 	// This will read the player LVL and then give him the title he needs
-	new Handle:query2 = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE `lvl` <= (%d) and `lvl` ORDER BY abs(`lvl` - %d) LIMIT 1", table2, get_sql_lvl[id], get_sql_lvl[id])
-	if (!SQL_Execute(query2))
+	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE `lvl` <= (%d) and `lvl` ORDER BY abs(`lvl` - %d) LIMIT 1", table, get_sql_lvl[id], get_sql_lvl[id])
+	if (!SQL_Execute(query))
 	{
 		server_print("query not loaded")
-		SQL_QueryError(query2, error, 127)
+		SQL_QueryError(query, error, 127)
 		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
 	} else {
-		while (SQL_MoreResults(query2))
+		while (SQL_MoreResults(query))
 		{
 			new ranktitle[185]
-			SQL_ReadResult(query2, 1, ranktitle, 31)
+			SQL_ReadResult(query, 1, ranktitle, 31)
 			
 			top_rank = rank_max
 			
 			rank_name = ranktitle
-			SQL_NextRow(query2);
+			SQL_NextRow(query);
 		}
 	}
-	SQL_FreeHandle(query2);
 	SQL_FreeHandle(query);
 	SQL_FreeHandle(sql);
 	SQL_FreeHandle(info);
