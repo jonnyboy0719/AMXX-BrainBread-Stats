@@ -24,8 +24,8 @@
 //------------------
 
 #define PLUGIN	"BrainBread STATS"
-#define AUTHOR	"BrainBread 2 Dev Team"
-#define VERSION	"2.6"
+#define AUTHOR	"Reperio Studios"
+#define VERSION	"2.7"
 
 //------------------
 //	Handles & more
@@ -82,6 +82,7 @@ public plugin_init() {
 
 	// Client commands
 	register_clcmd("reset", "ResetSkills")
+	register_clcmd("fullreset", "FullReset")
 	register_clcmd("autoload", "AutoLoadSkills")
 	register_clcmd("loadpoints", "LoadPoints")
 	register_clcmd("bbhelp", "BBHelp")
@@ -173,6 +174,43 @@ public ResetSkills(id)
 	bb_set_user_hps(id, 0);
 	bb_set_user_skill(id, 0);
 	bb_set_user_speed(id, 0);
+
+	return PLUGIN_HANDLED
+}
+
+//------------------
+//	FullReset()
+//------------------
+
+public FullReset(id)
+{
+	// Lets print the old stats
+	new hps, skill, level, speed, points;
+	hps = bb_get_user_hps(id);
+	skill = bb_get_user_skill(id);
+	level = bb_get_user_level(id);
+	speed = bb_get_user_speed(id);
+	points = bb_get_user_points(id);
+	new Float:exp = bb_get_user_exp(id)
+
+	client_print ( id, print_console, "==----------[[ ORIGINAL STATS ]]--------------==" )
+	client_print ( id, print_console, "LEVEL: %d", level )
+	client_print ( id, print_console, "EXP: %f", exp )
+	client_print ( id, print_console, "HPS: %d", hps )
+	client_print ( id, print_console, "SKILL: %d", skill )
+	client_print ( id, print_console, "SPEED: %d", speed )
+	client_print ( id, print_console, "POINTS: %d", points )
+	client_print ( id, print_console, "==----------[[ ORIGINAL STATS ]]--------------==" )
+
+	// Now lets reset everything!
+	bb_set_user_points(id, 0);
+	bb_set_user_hps(id, 0);
+	bb_set_user_skill(id, 0);
+	bb_set_user_speed(id, 0);
+	bb_set_user_exp(id, 0.0);
+
+	// Lets print to the client's chat, so we know we made this action
+	client_print ( id, print_chat, "You have made a full reset of your skills, if this was a mistake, check the console for the original stats." ) 
 
 	return PLUGIN_HANDLED
 }
@@ -289,6 +327,7 @@ public BBHelp(id, ShowCommands)
 		client_print ( id, print_console, "==----------[[ BB STATS ]]--------------==" )
 		client_print ( id, print_console, "/bbhelp		--		Shows this information" )
 		client_print ( id, print_console, "/reset		--		To reset your skills" )
+		client_print ( id, print_console, "/fullreset	--		To reset your level, skills and experience back to 0 (can't be undone!)" )
 		client_print ( id, print_console, "/autoload	--		Autoloads your points on connection" )
 		client_print ( id, print_console, "/loadpoints	--		To load your points" )
 		client_print ( id, print_console, "/bbstats		--		Shows current version (%s)", VERSION )
@@ -324,6 +363,10 @@ public hook_say(id)
 	if (equali(said[0], "/reset"))
 	{
 		ResetSkills(id)
+	}
+	else if (equali(said[0], "/fullreset"))
+	{
+		FullReset(id)
 	}
 	else if (equali(said[0], "/autoload"))
 	{
@@ -1224,9 +1267,10 @@ GetPosition(id)
 		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_CON", error)
 	}
 
-	new table[32]
+	new table[32], table2[32]
 
 	get_cvar_string("bb_table", table, 31)
+	get_cvar_string("bb_rank_table", table2, 31)
 
 	new Handle:query = SQL_PrepareQuery(sql, "SELECT `authid` FROM `%s` ORDER BY `exp` + 0 DESC", table)
 
@@ -1249,6 +1293,27 @@ GetPosition(id)
 			SQL_NextRow(query);
 		}
 	}
+	
+	// This will read the player LVL and then give him the title he needs
+	new Handle:query2 = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE `lvl` <= (%d) and `lvl` ORDER BY abs(`lvl` - %d) LIMIT 1", table2, get_sql_lvl[id], get_sql_lvl[id])
+	if (!SQL_Execute(query2))
+	{
+		server_print("query not loaded")
+		SQL_QueryError(query2, error, 127)
+		server_print("[AMXX] %L", LANG_SERVER, "SQL_CANT_LOAD_ADMINS", error)
+	} else {
+		while (SQL_MoreResults(query2))
+		{
+			new ranktitle[185]
+			SQL_ReadResult(query2, 1, ranktitle, 31)
+			
+			top_rank = rank_max
+			
+			rank_name = ranktitle
+			SQL_NextRow(query2);
+		}
+	}
+	SQL_FreeHandle(query2);
 	SQL_FreeHandle(query);
 	SQL_FreeHandle(sql);
 	SQL_FreeHandle(info);
