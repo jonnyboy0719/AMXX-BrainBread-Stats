@@ -25,7 +25,7 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"Reperio Studios"
-#define VERSION	"2.7"
+#define VERSION	"2.8"
 
 //------------------
 //	Handles & more
@@ -590,9 +590,10 @@ public PlayerDataFile()
 	new bb_filerewrite = get_cvar_num ( "bb_filerewrite" )
 	get_cvar_string("sv_playerinfofile",player_data,63)
 	format( filename, 255, "%s", player_data )
-	if (file_exists(filename) && bb_filerewrite == 0)
+	if (file_exists(filename))
 	{
-		log_amx("Player Data file was found, please set sv_savexp to ^"0^" to make sure it doesn't read %s. The players will not load their SQL stats until the file is removed/renamed, to override this, enable bb_filerewrite.", filename)
+		if (bb_filerewrite == 0)
+			log_amx("Player Data file was found, please set sv_savexp to ^"0^" to make sure it doesn't read %s. The players will not load their SQL stats until the file is removed/renamed, to override this, enable bb_filerewrite.", filename)
 	}
 }
 
@@ -835,7 +836,7 @@ SaveLevel(id, auth[])
 */
 		new plyname[32]
 		get_user_name(id,plyname,31)
-		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `exp` = %i, `lvl` = %d, `skill_hp` = %d, `skill_skill` = %d, `skill_speed` = %d, `points` = %d WHERE `authid` = '%s';", table, floatround(GetEXP), level, hps, skill, speed, points, auth )
+		SQL_QueryAndIgnore(sql, "UPDATE `%s` SET `name` = '%s', `exp` = %i, `lvl` = %d, `skill_hp` = %d, `skill_skill` = %d, `skill_speed` = %d, `points` = %d WHERE `authid` = '%s';", table, plyname, floatround(GetEXP), level, hps, skill, speed, points, auth )
 	}
 
 	SQL_FreeHandle(query)
