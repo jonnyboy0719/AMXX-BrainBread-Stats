@@ -11,12 +11,20 @@ Commands
 -----------
 `/bbhelp` - Prints all the available commands on the console  
 `/reset` - To reset your skills  
+`/fullreset` - To reset your level, skills and experience back to 0 (can't be undone!)  
 `/autoload` - Autoloads your points on connection  
 `/loadpoints` - To load your points  
 `/bbstats or /version` - To show the correction  
 `/top10` - Shows the top10 players  
 `/rank` - Shows your rank  
 `/web` - Shows webstats url  
+
+Server Commands
+-----------
+`bb_ranking` - This will enable ranking, or simply disable it.  
+`bb_gameinfo` - This will enable GameInformation to be overwritten.  
+`bb_filerewrite` - This will re-write the player data file if sv_savexp is not on 0  
+`bb_webstats_url` - This will display the webstats  
 
 How it Works
 -----------
