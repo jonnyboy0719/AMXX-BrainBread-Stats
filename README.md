@@ -3,7 +3,7 @@ AMXX -- BrainBread Stats
 
 This plugin will save all of your stats to a MySQL server, which multiple servers can use w/o needing to copy players.lvl.
 
-Created by: Johan Eherndahl -- [BrainBread 2 Dev Team](http://bb.brainbread2.eu/)  
+Created by: Johan Eherndahl -- [Reperio Studios](http://reperio-studios.net/)  
 Special thanks: Noname -- [Asd2Bam](http://asd2bam.org/)  
 
 
