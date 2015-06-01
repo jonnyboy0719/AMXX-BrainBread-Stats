@@ -207,6 +207,7 @@ public FullReset(id)
 	bb_set_user_hps(id, 0);
 	bb_set_user_skill(id, 0);
 	bb_set_user_speed(id, 0);
+	bb_set_user_level(id, 0);
 	bb_set_user_exp(id, 0.0);
 
 	// Lets print to the client's chat, so we know we made this action
