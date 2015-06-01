@@ -25,7 +25,7 @@
 
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"Reperio Studios"
-#define VERSION	"2.9"
+#define VERSION	"3.0"
 
 //------------------
 //	Handles & more
