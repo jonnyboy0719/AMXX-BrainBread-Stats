@@ -23,15 +23,17 @@
 //	Defines
 //------------------
 
+#define SND_LVLUP "sound/misc/levelup.wav"
+
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"Reperio Studios"
-#define VERSION	"3.0"
+#define VERSION	"3.1"
 
 //------------------
 //	Handles & more
 //------------------
 
-new const lvlupsnd[] = "sound/misc/levelup.wav" 
+//new const lvlupsnd[] = "sound/misc/levelup.wav" 
 new lastfrags[33]
 new lastDeadflag[33]
 new bool:LoadStatsForPlayer[33]
@@ -45,7 +47,7 @@ new g_oldangles[33][3]
 new rank_max = 0
 new get_sql_lvl[33]
 // Global stuff
-new gb_sql_kills,gb_sql_kills_player,gb_sql_gametime
+new gb_sql_kills[33], gb_sql_kills_player[33], gb_sql_gametime[33]
 new mysqlx_host, mysqlx_user, mysqlx_db, mysqlx_pass, mysqlx_type
 new setranking, rank_name[185], ply_rank, top_rank
 
@@ -100,7 +102,7 @@ public plugin_init() {
 
 public plugin_precache()
 {
-	precache_sound("misc/levelup.wav")
+	precache_sound(SND_LVLUP)
 }
 
 //------------------
@@ -129,7 +131,7 @@ public EVENT_PlayerDeath()
 		new auth[33];
 		get_user_authid( killer, auth, 32);
 		SaveLevel(killer, auth);
-		SaveKills(auth,"human_player");
+		SaveKills(killer, auth, "human_player");
 	}
 }
 
@@ -164,11 +166,11 @@ public ResetSkills(id)
 	points = bb_get_user_points(id);
 
 	// Now, lets convert them into points!
-	bb_set_user_points(id, points+(hps+speed+skill));
+	new GetPoints = points+(hps+speed+skill)
+	bb_set_user_points(id, GetPoints);
 
 	// Lets print to the client's chat, so we know we made this action
-	new GetPoints = points+(hps+speed+skill)
-	client_print ( id, print_chat, "You skills have been reset, and turned them into %d point(s).", GetPoints ) 
+	client_print ( id, print_chat, "Your skills have been reset, and turned them into %d point(s).", GetPoints ) 
 
 	// Now the last bit, lets reset the skills
 	bb_set_user_hps(id, 0);
@@ -193,9 +195,18 @@ public FullReset(id)
 	points = bb_get_user_points(id);
 	new Float:exp = bb_get_user_exp(id)
 
+	new steamid[32], name[32]
+
+	get_user_authid(id, steamid, 31)
+	get_user_name(id, name, 31)
+
+	// Lets display it for the client
 	client_print ( id, print_console, "==----------[[ ORIGINAL STATS ]]--------------==" )
+	client_print ( id, print_console, "NAME: %s", name )
+	client_print ( id, print_console, "STEAMID: %s", steamid )
+	client_print ( id, print_console, "==-------" )
 	client_print ( id, print_console, "LEVEL: %d", level )
-	client_print ( id, print_console, "EXP: %f", exp )
+	client_print ( id, print_console, "EXP: %i", floatround(exp) )
 	client_print ( id, print_console, "HPS: %d", hps )
 	client_print ( id, print_console, "SKILL: %d", skill )
 	client_print ( id, print_console, "SPEED: %d", speed )
@@ -292,7 +303,7 @@ public AnnounceNewLevel(id, newlvl)
 			
 			new Float:SetTime = 10.0
 			set_hudmessage(85, 255, 0, 0.02, 0.73, 0, 6.0, SetTime, 0.5, 0.15, -1)
-			client_cmd( players[i] , "spk ^"%s^"", lvlupsnd ) 
+			client_cmd( players[i] , "spk ^"%s^"", SND_LVLUP ) 
 			
 			show_hudmessage ( players[i], "%s has leveled up to %d! Rank: %d of %d with the title: ^"%s^"", plyname, newlvl, ply_rank, top_rank, rank_name )
 			client_print ( players[i], print_chat, "%s has leveled up to %d! Rank: %d of %d with the title: ^"%s^"", plyname, newlvl, ply_rank, top_rank, rank_name )
@@ -480,7 +491,7 @@ public CheckGameTime() {
 				
 				new auth[33];
 				get_user_authid( i, auth, 32);
-				SaveGameTime(auth);
+				SaveGameTime(i, auth);
 			}
 		}
 	}
@@ -494,21 +505,21 @@ public CheckGameTime() {
 public PluginThinkLoop()
 {
 	new iPlayers[32],iNum
-	get_players(iPlayers,iNum)
-	for(new i=0;i<iNum;i++)
+	get_players(iPlayers, iNum)
+	for(new i = 0;i < iNum; i++)
 	{
-		new id=iPlayers[i]
+		new id = iPlayers[i]
 		if(is_user_connected(id))
 		{
 			new GetCurrentLevel = bb_get_user_level(id);
-			if(get_user_frags(id)>lastfrags[id])
+			if(get_user_frags(id) > lastfrags[id])
 			{
-				lastfrags[id]=get_user_frags(id)
+				lastfrags[id] = get_user_frags(id)
 				
 				new auth[33];
 				get_user_authid( id, auth, 32);
 				SaveLevel(id, auth)
-				SaveKills(auth)
+				SaveKills(id, auth)
 			}
 			if (LoadStatsForPlayer[id])
 			{
@@ -900,7 +911,7 @@ UpdateConnection(client, auth[],IsOnline=true)
 //	SaveKills()
 //------------------
 
-SaveKills(auth[],IsType[]="")
+SaveKills(id, auth[],IsType[]="")
 {
 	new error[128], errno
 
@@ -916,10 +927,10 @@ SaveKills(auth[],IsType[]="")
 
 	get_cvar_string("bb_table", table, 31)
 	
-	UpdateKills(auth)
+	UpdateKills(id, auth)
 	
-	new set_frags = 1 + gb_sql_kills
-	new set_player_kills = 1 + gb_sql_kills_player
+	new set_frags = 1 + gb_sql_kills[id]
+	new set_player_kills = 1 + gb_sql_kills_player[id]
 
 	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
 
@@ -943,7 +954,7 @@ SaveKills(auth[],IsType[]="")
 //	UpdateKills()
 //------------------
 
-UpdateKills(auth[])
+UpdateKills(id, auth[])
 {
 	new error[128], errno
 
@@ -981,8 +992,8 @@ UpdateKills(auth[])
 			sql_kills = SQL_ReadResult(query, kills);
 			sql_kills_player = SQL_ReadResult(query, kills_player);
 			
-			gb_sql_kills = sql_kills
-			gb_sql_kills_player = sql_kills_player
+			gb_sql_kills[id] = sql_kills
+			gb_sql_kills_player[id] = sql_kills_player
 			
 			SQL_NextRow(query);
 		}
@@ -1401,7 +1412,7 @@ CreateStats(id, auth[])
 //	SaveGameTime()
 //------------------
 
-SaveGameTime(auth[])
+SaveGameTime(id, auth[])
 {
 	new error[128], errno
 
@@ -1417,9 +1428,9 @@ SaveGameTime(auth[])
 
 	get_cvar_string("bb_table", table, 31)
 	
-	UpdateGameTime(auth)
+	UpdateGameTime(id, auth)
 	
-	new set_gametime = 1 + gb_sql_gametime
+	new set_gametime = 1 + gb_sql_gametime[id]
 
 	new Handle:query = SQL_PrepareQuery(sql, "SELECT * FROM `%s` WHERE (`authid` = '%s')", table, auth)
 
@@ -1441,7 +1452,7 @@ SaveGameTime(auth[])
 //	UpdateGameTime()
 //------------------
 
-UpdateGameTime(auth[])
+UpdateGameTime(id, auth[])
 {
 	new error[128], errno
 
@@ -1473,7 +1484,7 @@ UpdateGameTime(auth[])
 		while (SQL_MoreResults(query))
 		{
 			sql_gametime = SQL_ReadResult(query, gtime);
-			gb_sql_gametime = sql_gametime
+			gb_sql_gametime[id] = sql_gametime
 			SQL_NextRow(query);
 		}
 	}

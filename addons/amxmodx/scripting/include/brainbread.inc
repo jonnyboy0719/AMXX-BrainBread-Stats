@@ -61,6 +61,8 @@ stock bb_set_user_level(id,level) {
 		totalxp += 150 + ((i-1) * 300);
 	}
 
+	bb_set_user_points(id,level)
+
 	bb_set_user_exp(id,float(totalxp))
 
 	message_begin(MSG_ONE,120,{0,0,0},id);
@@ -97,8 +99,18 @@ stock bb_set_user_exp(id,Float:exp) {
 	return set_pdata_float(id,4,exp, -1);
 }
 
+/*
+	Adds EXP to the player
+*/
 stock bb_update_user_exp(id,Float:exp) {
 	return set_pdata_float(id,4, bb_get_user_exp(id) + exp, -1);
+}
+
+/*
+	Removes EXP from the player
+*/
+stock bb_remove_user_exp(id,Float:exp) {
+	return set_pdata_float(id,4, bb_get_user_exp(id) - exp, -1);
 }
 
 /* Returns Available Skill Points of player */
@@ -182,7 +194,7 @@ stock bb_get_user_flame_ammo(id) {
 	}
 
 	if(is_valid_ent(weapon)) {
-		return get_pdata_int(weapon,176);
+		return get_pdata_int(weapon,173);
 	}
 
 	return 0;
@@ -205,12 +217,107 @@ stock bb_set_user_flame_ammo(id,ammo) {
 	}
 
 	if(is_valid_ent(weapon)) {
-		set_pdata_int(weapon,174,ammo);
-		return set_pdata_int(weapon,176,ammo);
+		set_pdata_int(weapon,173,ammo);
+		return set_pdata_int(weapon,173,ammo);
 	}
 
 	return 0;
 }
+
+/* Sets any ammo for a weapon */
+stock bb_setammo_primary(id,weapon_index[],ammo) {
+	new weapon, current, Float:origin[3], Float:radius = 0.5;
+	entity_get_vector(id,EV_VEC_origin,origin);
+
+	while((current = find_ent_in_sphere(current,origin,radius)) != 0) {
+		new classname[32];
+		entity_get_string(current,EV_SZ_classname,classname,31);
+
+		if(equal(classname, weapon_index)) {
+			weapon = current;
+			break;
+		}
+
+	}
+
+	if(is_valid_ent(weapon)) {
+		set_pdata_int(weapon,173,ammo);
+		return set_pdata_int(weapon,173,ammo);
+	}
+
+	return 0;
+}
+stock bb_setammo_secondary(id,weapon_index[],ammo) {
+	new weapon, current, Float:origin[3], Float:radius = 0.5;
+	entity_get_vector(id,EV_VEC_origin,origin);
+
+	while((current = find_ent_in_sphere(current,origin,radius)) != 0) {
+		new classname[32];
+		entity_get_string(current,EV_SZ_classname,classname,31);
+
+		if(equal(classname, weapon_index)) {
+			weapon = current;
+			break;
+		}
+
+	}
+
+	if(is_valid_ent(weapon)) {
+		set_pdata_int(weapon,172,ammo);
+		return set_pdata_int(weapon,172,ammo);
+	}
+
+	return 0;
+}
+
+/* debug */
+stock bb_debugvalues(id, const weapon_index[]) {
+	new weapon, current, Float:origin[3], Float:radius = 0.5;
+	entity_get_vector(id,EV_VEC_origin,origin);
+
+	while((current = find_ent_in_sphere(current,origin,radius)) != 0) {
+		new classname[32];
+		entity_get_string(current,EV_SZ_classname,classname,31);
+
+		if(equal(classname, weapon_index)) {
+			weapon = current;
+			break;
+		}
+
+	}
+
+	if(is_valid_ent(weapon)) {
+		test(id, weapon);
+		return get_pdata_int(weapon,173);
+	}
+
+	return 0;
+}
+
+stock test(player, weapon) {
+	new iCount = 0;
+	for(new i = 1; i <= 200; i++)
+	{
+		new id = get_pdata_int(weapon,i);
+		client_print(player,print_console,"[BB] ID%d: %d", i, id)
+		++iCount;
+	//	if (i == 200)
+	//		test2(player, weapon);
+	}
+}
+/*
+stock test2(player, weapon) {
+	new iCount = 0;
+	for(new i = 201; i <= 400; i++)
+	{
+		new id = get_pdata_int(weapon,i);
+		client_print(player,print_console,"[BB] ID%d: %d", i, id)
+		++iCount;
+	//	if (i == 200)
+	//		test2(player, weapon);
+	}
+}
+*/
 
 /* Returns minigun ammo for player */
 stock bb_get_user_minigun_ammo(id) {
@@ -229,7 +336,7 @@ stock bb_get_user_minigun_ammo(id) {
 	}
 
 	if(is_valid_ent(weapon)) {
-		return get_pdata_int(weapon,176);
+		return get_pdata_int(weapon,173);
 	}
 
 	return 0;
@@ -252,11 +359,17 @@ stock bb_set_user_minigun_ammo(id,ammo) {
 	}
 
 	if(is_valid_ent(weapon)) {
-		set_pdata_int(weapon,174,ammo);
-		return set_pdata_int(weapon,176,ammo);
+		set_pdata_int(weapon,173,ammo);
+		return set_pdata_int(weapon,173,ammo);
 	}
 
 	return 0;
+}
+
+
+/* Returns if player is a human */
+stock bb_get_user_human(id) {
+	return (entity_get_int(id,EV_INT_team) == 1) ? 1 : 0;
 }
 
 /* Returns if player is a zombie */
@@ -311,7 +424,7 @@ stock bb_set_user_zombie(id,zombie) {
 	entity_set_vector(id,EV_VEC_v_angle,v_angle);
 
 	strip_user_weapons(id);
-	bb_give_item(id,(team == 2) ? "weapon_hand" : "weapon_knife");
+	bb_give_item_ex(id,(team == 2) ? "weapon_hand" : "weapon_knife");
 
 	set_pdata_int(id,415,1);
 
@@ -339,6 +452,32 @@ stock bb_give_item(id,item[]) {
 	}
 
 	set_task(0.1,"qwertyuiop1234567890",weapon);
+	return 1;
+}
+
+stock bb_give_item_ex(id, const item[]) {
+	new weapon = create_entity(item);
+
+	if(is_valid_ent(weapon) == 0) {
+		return 0;
+	}
+
+	entity_set_origin(weapon,Float:{40000.0,40000.0,40000.0});
+	entity_set_edict(weapon,EV_ENT_euser4,id);
+	DispatchSpawn(weapon);
+
+	if(is_valid_ent(weapon) == 0) {
+		return 0;
+	}
+
+	// Needs to be called on the plugin itself, its a weird bug i know.
+	// And using stock doesn't work either.
+	/*
+public give_item_ex_task(weapon) {
+	dllfunc(DLLFunc_Touch,weapon,entity_get_edict(weapon,EV_ENT_euser4));
+}
+	*/
+	set_task(0.1,"give_item_ex_task",weapon);
 	return 1;
 }
 
