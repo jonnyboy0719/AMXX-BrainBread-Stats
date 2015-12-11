@@ -23,11 +23,16 @@
 //	Defines
 //------------------
 
+// Defined Sounds
 #define SND_LVLUP "sound/misc/levelup.wav"
 
+// Precache Sounds
+#define SND_LVLUP_CACHE "misc/levelup.wav"
+
+// Plugin
 #define PLUGIN	"BrainBread STATS"
 #define AUTHOR	"Reperio Studios"
-#define VERSION	"3.1"
+#define VERSION	"3.1b"
 
 //------------------
 //	Handles & more
@@ -102,7 +107,7 @@ public plugin_init() {
 
 public plugin_precache()
 {
-	precache_sound(SND_LVLUP)
+	precache_sound(SND_LVLUP_CACHE)
 }
 
 //------------------
